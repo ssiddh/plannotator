@@ -649,6 +649,7 @@ const App: React.FC = () => {
           vaultPath: effectiveVaultPath,
           folder: obsidianSettings.folder || 'plannotator',
           plan: markdown,
+          ...(obsidianSettings.filenameFormat && { filenameFormat: obsidianSettings.filenameFormat }),
         };
       }
 
@@ -857,7 +858,12 @@ const App: React.FC = () => {
       const s = getObsidianSettings();
       const vaultPath = getEffectiveVaultPath(s);
       if (vaultPath) {
-        body.obsidian = { vaultPath, folder: s.folder || 'plannotator', plan: markdown };
+        body.obsidian = {
+          vaultPath,
+          folder: s.folder || 'plannotator',
+          plan: markdown,
+          ...(s.filenameFormat && { filenameFormat: s.filenameFormat }),
+        };
       }
     }
     if (target === 'bear') {

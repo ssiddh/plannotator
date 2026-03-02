@@ -6,6 +6,7 @@ import {
   getObsidianSettings,
   saveObsidianSettings,
   CUSTOM_PATH_SENTINEL,
+  DEFAULT_FILENAME_FORMAT,
   type ObsidianSettings,
 } from '../utils/obsidian';
 import {
@@ -627,6 +628,37 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
                                 placeholder="plannotator"
                                 className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
                               />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground">Filename Format</label>
+                            <input
+                              type="text"
+                              value={obsidian.filenameFormat || ''}
+                              onChange={(e) => handleObsidianChange({ filenameFormat: e.target.value || undefined })}
+                              placeholder={DEFAULT_FILENAME_FORMAT}
+                              className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                            />
+                            <div className="text-[10px] text-muted-foreground/70">
+                              Variables: <code className="text-[10px]">{'{title}'}</code> <code className="text-[10px]">{'{YYYY}'}</code> <code className="text-[10px]">{'{MM}'}</code> <code className="text-[10px]">{'{DD}'}</code> <code className="text-[10px]">{'{Mon}'}</code> <code className="text-[10px]">{'{D}'}</code> <code className="text-[10px]">{'{HH}'}</code> <code className="text-[10px]">{'{h}'}</code> <code className="text-[10px]">{'{hh}'}</code> <code className="text-[10px]">{'{mm}'}</code> <code className="text-[10px]">{'{ss}'}</code> <code className="text-[10px]">{'{ampm}'}</code>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground/70">
+                              Preview: {(() => {
+                                const fmt = obsidian.filenameFormat?.trim() || DEFAULT_FILENAME_FORMAT;
+                                const now = new Date();
+                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                const h24 = now.getHours(); const h12 = h24 % 12 || 12;
+                                const vars: Record<string, string> = {
+                                  title: 'My Plan Title', YYYY: String(now.getFullYear()),
+                                  MM: String(now.getMonth()+1).padStart(2,'0'), DD: String(now.getDate()).padStart(2,'0'),
+                                  Mon: months[now.getMonth()], D: String(now.getDate()),
+                                  HH: String(h24).padStart(2,'0'), h: String(h12), hh: String(h12).padStart(2,'0'),
+                                  mm: String(now.getMinutes()).padStart(2,'0'), ss: String(now.getSeconds()).padStart(2,'0'),
+                                  ampm: h24 >= 12 ? 'pm' : 'am',
+                                };
+                                return fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + '.md';
+                              })()}
                             </div>
                           </div>
 
