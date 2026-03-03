@@ -439,21 +439,18 @@ const App: React.FC = () => {
 
   // Obsidian vault browser
   const vaultBrowser = useVaultBrowser();
-  const [showVaultTab, setShowVaultTab] = useState(false);
-  const [vaultPath, setVaultPath] = useState('');
 
-  // Sync vault browser visibility when settings change
+  const showVaultTab = useMemo(() => isVaultBrowserEnabled(), [uiPrefs]);
+  const vaultPath = useMemo(() => {
+    if (!showVaultTab) return '';
+    const settings = getObsidianSettings();
+    return getEffectiveVaultPath(settings);
+  }, [showVaultTab, uiPrefs]);
+
+  // Clear active file when vault browser is disabled
   useEffect(() => {
-    const enabled = isVaultBrowserEnabled();
-    setShowVaultTab(enabled);
-    if (enabled) {
-      const settings = getObsidianSettings();
-      setVaultPath(getEffectiveVaultPath(settings));
-    } else {
-      setVaultPath('');
-      vaultBrowser.setActiveFile(null);
-    }
-  }, [uiPrefs]); // uiPrefs changes when any settings update
+    if (!showVaultTab) vaultBrowser.setActiveFile(null);
+  }, [showVaultTab]);
 
   // Auto-fetch vault tree when vault tab is first opened
   useEffect(() => {
@@ -462,33 +459,36 @@ const App: React.FC = () => {
     }
   }, [sidebar.activeTab, showVaultTab, vaultPath]);
 
+  const buildVaultDocUrl = React.useCallback(
+    (vp: string) => (path: string) =>
+      `/api/reference/obsidian/doc?vaultPath=${encodeURIComponent(vp)}&path=${encodeURIComponent(path)}`,
+    []
+  );
+
   // Vault file selection: open via linked doc system with vault endpoint
   const handleVaultFileSelect = React.useCallback((relativePath: string) => {
-    const vp = vaultPath;
-    linkedDocHook.open(relativePath, (path) =>
-      `/api/reference/obsidian/doc?vaultPath=${encodeURIComponent(vp)}&path=${encodeURIComponent(path)}`
-    );
+    linkedDocHook.open(relativePath, buildVaultDocUrl(vaultPath));
     vaultBrowser.setActiveFile(relativePath);
-  }, [vaultPath, linkedDocHook, vaultBrowser]);
+  }, [vaultPath, linkedDocHook, vaultBrowser, buildVaultDocUrl]);
 
   // Route linked doc opens through vault endpoint when viewing a vault file
   const handleOpenLinkedDoc = React.useCallback((docPath: string) => {
     if (vaultBrowser.activeFile && vaultPath) {
-      // Currently viewing a vault file — wikilinks should resolve within the vault
-      const vp = vaultPath;
-      linkedDocHook.open(docPath, (path) =>
-        `/api/reference/obsidian/doc?vaultPath=${encodeURIComponent(vp)}&path=${encodeURIComponent(path)}`
-      );
+      linkedDocHook.open(docPath, buildVaultDocUrl(vaultPath));
     } else {
       linkedDocHook.open(docPath);
     }
-  }, [vaultBrowser.activeFile, vaultPath, linkedDocHook]);
+  }, [vaultBrowser.activeFile, vaultPath, linkedDocHook, buildVaultDocUrl]);
 
   // Wrap linked doc back to also clear vault active file
   const handleLinkedDocBack = React.useCallback(() => {
     linkedDocHook.back();
     vaultBrowser.setActiveFile(null);
   }, [linkedDocHook, vaultBrowser]);
+
+  const handleVaultFetchTree = React.useCallback(() => {
+    vaultBrowser.fetchTree(vaultPath);
+  }, [vaultBrowser, vaultPath]);
 
   // Track active section for TOC highlighting
   const headingCount = useMemo(() => blocks.filter(b => b.type === 'heading').length, [blocks]);
@@ -1275,14 +1275,9 @@ const App: React.FC = () => {
                 onLinkedDocBack={linkedDocHook.isActive ? handleLinkedDocBack : undefined}
                 showVaultTab={showVaultTab}
                 vaultPath={vaultPath}
-                vaultTree={vaultBrowser.tree}
-                vaultIsLoading={vaultBrowser.isLoading}
-                vaultError={vaultBrowser.error}
-                vaultExpandedFolders={vaultBrowser.expandedFolders}
-                onVaultToggleFolder={vaultBrowser.toggleFolder}
+                vaultBrowser={vaultBrowser}
                 onVaultSelectFile={handleVaultFileSelect}
-                vaultActiveFile={vaultBrowser.activeFile}
-                onVaultFetchTree={() => vaultBrowser.fetchTree(vaultPath)}
+                onVaultFetchTree={handleVaultFetchTree}
                 versionInfo={versionInfo}
                 versions={planDiff.versions}
                 projectPlans={planDiff.projectPlans}

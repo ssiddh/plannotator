@@ -691,12 +691,12 @@ tags: [plan, ...]
                                 role="switch"
                                 aria-checked={obsidian.vaultBrowserEnabled}
                                 onClick={() => handleObsidianChange({ vaultBrowserEnabled: !obsidian.vaultBrowserEnabled })}
-                                className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
                                   obsidian.vaultBrowserEnabled ? 'bg-primary' : 'bg-muted'
                                 }`}
                               >
-                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
-                                  obsidian.vaultBrowserEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                  obsidian.vaultBrowserEnabled ? 'translate-x-6' : 'translate-x-1'
                                 }`} />
                               </button>
                             </div>

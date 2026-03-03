@@ -7,13 +7,9 @@
  */
 
 import { useState, useCallback } from "react";
+import type { VaultNode } from "../types";
 
-export interface VaultNode {
-  name: string;
-  path: string; // relative path within vault
-  type: "file" | "folder";
-  children?: VaultNode[];
-}
+export type { VaultNode };
 
 export interface UseVaultBrowserReturn {
   tree: VaultNode[];

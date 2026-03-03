@@ -87,3 +87,10 @@ export interface SelectedLineRange {
   side: 'deletions' | 'additions';
   endSide?: 'deletions' | 'additions';
 }
+
+export interface VaultNode {
+  name: string;
+  path: string; // relative path within vault
+  type: "file" | "folder";
+  children?: VaultNode[];
+}

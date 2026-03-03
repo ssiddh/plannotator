@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import type { VaultNode } from "../../hooks/useVaultBrowser";
+import type { VaultNode } from "../../types";
 
 interface VaultBrowserProps {
   vaultPath: string;

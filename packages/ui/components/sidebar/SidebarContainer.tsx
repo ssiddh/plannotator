@@ -9,7 +9,7 @@ import React from "react";
 import type { SidebarTab } from "../../hooks/useSidebar";
 import type { Block, Annotation } from "../../types";
 import type { VersionInfo, VersionEntry, ProjectPlan } from "../../hooks/usePlanDiff";
-import type { VaultNode } from "../../hooks/useVaultBrowser";
+import type { UseVaultBrowserReturn } from "../../hooks/useVaultBrowser";
 import { TableOfContents } from "../TableOfContents";
 import { VersionBrowser } from "./VersionBrowser";
 import { VaultBrowser } from "./VaultBrowser";
@@ -29,13 +29,8 @@ interface SidebarContainerProps {
   // Vault Browser props
   showVaultTab?: boolean;
   vaultPath?: string;
-  vaultTree?: VaultNode[];
-  vaultIsLoading?: boolean;
-  vaultError?: string | null;
-  vaultExpandedFolders?: Set<string>;
-  onVaultToggleFolder?: (path: string) => void;
+  vaultBrowser?: UseVaultBrowserReturn;
   onVaultSelectFile?: (relativePath: string) => void;
-  vaultActiveFile?: string | null;
   onVaultFetchTree?: () => void;
   // Version Browser props
   versionInfo: VersionInfo | null;
@@ -66,13 +61,8 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
   onLinkedDocBack,
   showVaultTab,
   vaultPath,
-  vaultTree,
-  vaultIsLoading,
-  vaultError,
-  vaultExpandedFolders,
-  onVaultToggleFolder,
+  vaultBrowser,
   onVaultSelectFile,
-  vaultActiveFile,
   onVaultFetchTree,
   versionInfo,
   versions,
@@ -209,16 +199,16 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
             onFetchProjectPlans={onFetchProjectPlans}
           />
         )}
-        {activeTab === "vault" && showVaultTab && vaultPath && (
+        {activeTab === "vault" && showVaultTab && vaultPath && vaultBrowser && (
           <VaultBrowser
             vaultPath={vaultPath}
-            tree={vaultTree ?? []}
-            isLoading={vaultIsLoading ?? false}
-            error={vaultError ?? null}
-            expandedFolders={vaultExpandedFolders ?? new Set()}
-            onToggleFolder={onVaultToggleFolder ?? (() => {})}
+            tree={vaultBrowser.tree}
+            isLoading={vaultBrowser.isLoading}
+            error={vaultBrowser.error}
+            expandedFolders={vaultBrowser.expandedFolders}
+            onToggleFolder={vaultBrowser.toggleFolder}
             onSelectFile={onVaultSelectFile ?? (() => {})}
-            activeFile={vaultActiveFile ?? null}
+            activeFile={vaultBrowser.activeFile}
             onFetchTree={onVaultFetchTree ?? (() => {})}
           />
         )}
