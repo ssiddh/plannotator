@@ -10,7 +10,7 @@
  * - /plannotator command or Ctrl+Alt+P to toggle
  * - --plan flag to start in planning mode
  * - --plan-file flag to customize the plan file path
- * - Bash restricted (destructive commands blocked) during planning
+ * - Bash unrestricted during planning (prompt-guided)
  * - Write restricted to plan file only during planning
  * - exit_plan_mode tool with browser-based visual approval
  * - [DONE:n] markers for execution progress tracking
@@ -26,7 +26,7 @@ import type { AssistantMessage, TextContent } from "@mariozechner/pi-ai";
 import { Type } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Key } from "@mariozechner/pi-tui";
-import { isDestructiveCommand, markCompletedSteps, parseChecklist, type ChecklistItem } from "./utils.js";
+import { markCompletedSteps, parseChecklist, type ChecklistItem } from "./utils.js";
 import {
   startPlanReviewServer,
   startReviewServer,
@@ -76,7 +76,7 @@ export default function plannotator(pi: ExtensionAPI): void {
   // ── Flags ────────────────────────────────────────────────────────────
 
   pi.registerFlag("plan", {
-    description: "Start in plan mode (read-only exploration)",
+    description: "Start in plan mode (restricted exploration and planning)",
     type: "boolean",
     default: false,
   });
@@ -451,19 +451,9 @@ export default function plannotator(pi: ExtensionAPI): void {
 
   // ── Event Handlers ───────────────────────────────────────────────────
 
-  // Gate writes and bash during planning
+  // Gate writes during planning
   pi.on("tool_call", async (event, ctx) => {
     if (phase !== "planning") return;
-
-    if (event.toolName === "bash") {
-      const command = event.input.command as string;
-      if (isDestructiveCommand(command)) {
-        return {
-          block: true,
-          reason: `Plannotator: destructive command blocked during planning.\nCommand: ${command}`,
-        };
-      }
-    }
 
     if (event.toolName === "write") {
       const targetPath = resolve(ctx.cwd, event.input.path as string);
@@ -497,7 +487,9 @@ export default function plannotator(pi: ExtensionAPI): void {
           content: `[PLANNOTATOR - PLANNING PHASE]
 You are in plan mode. You MUST NOT make any changes to the codebase — no edits, no commits, no installs, no destructive commands. The ONLY file you may write to or edit is the plan file: ${planFilePath}.
 
-Available tools: read, bash (destructive commands are blocked; curl/wget for web fetching is allowed), grep, find, ls, write (${planFilePath} only), edit (${planFilePath} only), exit_plan_mode
+Available tools: read, bash, grep, find, ls, write (${planFilePath} only), edit (${planFilePath} only), exit_plan_mode
+
+Do not run destructive bash commands (rm, git push, npm install, etc.) — focus on reading and exploring the codebase. Web fetching (curl, wget) is fine.
 
 ## Iterative Planning Workflow
 

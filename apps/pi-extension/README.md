@@ -104,7 +104,7 @@ The extension manages a state machine: **idle** → **planning** → **executing
 
 During **planning**:
 - All tools from other extensions remain available
-- Bash blocks destructive commands (rm, git push, npm install, etc.) but allows read-only and web fetching (curl, wget)
+- Bash is unrestricted — the agent is guided by the system prompt not to run destructive commands
 - Writes and edits restricted to the plan file only
 
 During **executing**:
