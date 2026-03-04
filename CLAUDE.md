@@ -37,6 +37,7 @@ plannotator/
 │   │   ├── share-url.ts          # Server-side share URL generation for remote sessions
 │   │   ├── remote.ts             # isRemoteSession(), getServerPort()
 │   │   ├── browser.ts            # openBrowser()
+│   │   ├── draft.ts              # Annotation draft persistence (~/.plannotator/drafts/)
 │   │   ├── integrations.ts       # Obsidian, Bear integrations
 │   │   ├── ide.ts                # VS Code diff integration (openEditorDiff)
 │   │   └── project.ts            # Project name detection for tags
@@ -45,7 +46,7 @@ plannotator/
 │   │   │   ├── plan-diff/        # PlanDiffBadge, PlanDiffViewer, clean/raw diff views
 │   │   │   └── sidebar/          # SidebarContainer, SidebarTabs, VersionBrowser
 │   │   ├── utils/                # parser.ts, sharing.ts, storage.ts, planSave.ts, agentSwitch.ts, planDiffEngine.ts
-│   │   ├── hooks/                # useSharing.ts, usePlanDiff.ts, useSidebar.ts, useLinkedDoc.ts
+│   │   ├── hooks/                # useSharing.ts, usePlanDiff.ts, useSidebar.ts, useLinkedDoc.ts, useAnnotationDraft.ts, useCodeAnnotationDraft.ts
 │   │   └── types.ts
 │   ├── editor/                   # Plan review App.tsx
 │   └── review-editor/            # Code review UI
@@ -160,6 +161,7 @@ Send Annotations → feedback sent to agent session
 | `/api/reference/obsidian/doc`   | GET | Read a vault markdown file (`?vaultPath=<path>&path=<file>`) |
 | `/api/plan/vscode-diff` | POST   | Open diff in VS Code (body: baseVersion)   |
 | `/api/doc`              | GET    | Serve linked .md/.mdx file (`?path=<path>`) |
+| `/api/draft`          | GET/POST/DELETE | Auto-save annotation drafts to survive server crashes |
 
 ### Review Server (`packages/server/review.ts`)
 
@@ -169,6 +171,7 @@ Send Annotations → feedback sent to agent session
 | `/api/feedback`       | POST   | Submit review (body: feedback, annotations, agentSwitch) |
 | `/api/image`          | GET    | Serve image by path query param            |
 | `/api/upload`         | POST   | Upload image, returns `{ path, originalName }` |
+| `/api/draft`          | GET/POST/DELETE | Auto-save annotation drafts to survive server crashes |
 
 ### Annotate Server (`packages/server/annotate.ts`)
 
@@ -178,6 +181,7 @@ Send Annotations → feedback sent to agent session
 | `/api/feedback`       | POST   | Submit annotations (body: feedback, annotations) |
 | `/api/image`          | GET    | Serve image by path query param            |
 | `/api/upload`         | POST   | Upload image, returns `{ path, originalName }` |
+| `/api/draft`          | GET/POST/DELETE | Auto-save annotation drafts to survive server crashes |
 
 All servers use random ports locally or fixed port (`19432`) in remote mode.
 

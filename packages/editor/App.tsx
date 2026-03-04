@@ -43,7 +43,6 @@ import { usePlanDiff, type VersionInfo } from '@plannotator/ui/hooks/usePlanDiff
 import { useLinkedDoc } from '@plannotator/ui/hooks/useLinkedDoc';
 import { useVaultBrowser } from '@plannotator/ui/hooks/useVaultBrowser';
 import { useAnnotationDraft } from '@plannotator/ui/hooks/useAnnotationDraft';
-import { ConfirmDialog } from '@plannotator/ui/components/ConfirmDialog';
 import { isVaultBrowserEnabled } from '@plannotator/ui/utils/obsidian';
 import { SidebarTabs } from '@plannotator/ui/components/sidebar/SidebarTabs';
 import { SidebarContainer } from '@plannotator/ui/components/sidebar/SidebarContainer';
