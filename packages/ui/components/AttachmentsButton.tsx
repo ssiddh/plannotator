@@ -242,12 +242,14 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
           {/* Backdrop */}
           <div
             className="fixed inset-0 z-[90]"
+            data-popover-layer
             onClick={() => setIsOpen(false)}
           />
 
           {/* Popover content */}
           <div
             className="fixed z-[100] w-72 bg-card border border-border rounded-xl shadow-2xl p-3"
+            data-popover-layer
             style={{ top: position.top, left: position.left }}
             onClick={e => e.stopPropagation()}
           >

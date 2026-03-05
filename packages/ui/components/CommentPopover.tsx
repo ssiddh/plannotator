@@ -87,9 +87,9 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
       const target = e.target as Node | null;
       if (!target) return;
       if (popoverRef.current?.contains(target)) return;
-      // Don't close if clicking inside an AttachmentsButton portal (z-index 90+)
+      // Don't close if clicking inside a child portal (AttachmentsButton, ImageAnnotator, etc.)
       const el = target as HTMLElement;
-      if (el.closest?.('[class*="z-[90]"], [class*="z-[100]"]')) return;
+      if (el.closest?.('[data-popover-layer]')) return;
       onClose();
     };
 
