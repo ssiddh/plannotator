@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, extractFrontmatter, Frontmatter } from '@plannotator/ui/utils/parser';
+import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, extractFrontmatter, Frontmatter } from '@plannotator/ui/utils/parser';
 import { Viewer, ViewerHandle } from '@plannotator/ui/components/Viewer';
 import { AnnotationPanel } from '@plannotator/ui/components/AnnotationPanel';
 import { ExportModal } from '@plannotator/ui/components/ExportModal';
@@ -47,6 +47,7 @@ import { usePlanDiff, type VersionInfo } from '@plannotator/ui/hooks/usePlanDiff
 import { useLinkedDoc } from '@plannotator/ui/hooks/useLinkedDoc';
 import { useVaultBrowser } from '@plannotator/ui/hooks/useVaultBrowser';
 import { useAnnotationDraft } from '@plannotator/ui/hooks/useAnnotationDraft';
+import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { isVaultBrowserEnabled } from '@plannotator/ui/utils/obsidian';
 import { SidebarTabs } from '@plannotator/ui/components/sidebar/SidebarTabs';
 import { SidebarContainer } from '@plannotator/ui/components/sidebar/SidebarContainer';
@@ -563,6 +564,8 @@ const App: React.FC = () => {
     submitted: !!submitted,
   });
 
+  const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
+
   const handleRestoreDraft = React.useCallback(() => {
     const { annotations: restored, globalAttachments: restoredGlobal } = restoreDraft();
     if (restored.length > 0) {
@@ -778,7 +781,7 @@ const App: React.FC = () => {
       const hasDocAnnotations = Array.from(linkedDocHook.getDocAnnotations().values()).some(
         (d) => d.annotations.length > 0 || d.globalAttachments.length > 0
       );
-      if (annotations.length > 0 || globalAttachments.length > 0 || hasDocAnnotations) {
+      if (annotations.length > 0 || globalAttachments.length > 0 || hasDocAnnotations || editorAnnotations.length > 0) {
         body.feedback = annotationsOutput;
       }
 
@@ -868,7 +871,7 @@ const App: React.FC = () => {
       }
 
       // No annotations → Approve, otherwise → Send Feedback
-      if (annotations.length === 0) {
+      if (annotations.length === 0 && editorAnnotations.length === 0) {
         // Check if agent exists for OpenCode users
         if (origin === 'opencode') {
           const warning = getAgentWarning();
@@ -937,8 +940,9 @@ const App: React.FC = () => {
       (d) => d.annotations.length > 0 || d.globalAttachments.length > 0
     );
     const hasPlanAnnotations = annotations.length > 0 || globalAttachments.length > 0;
+    const hasEditorAnnotations = editorAnnotations.length > 0;
 
-    if (!hasPlanAnnotations && !hasDocAnnotations) {
+    if (!hasPlanAnnotations && !hasDocAnnotations && !hasEditorAnnotations) {
       return 'No changes detected.';
     }
 
@@ -950,8 +954,12 @@ const App: React.FC = () => {
       output += exportLinkedDocAnnotations(docAnnotations);
     }
 
+    if (hasEditorAnnotations) {
+      output += exportEditorAnnotations(editorAnnotations);
+    }
+
     return output;
-  }, [blocks, annotations, globalAttachments, linkedDocHook.getDocAnnotations]);
+  }, [blocks, annotations, globalAttachments, linkedDocHook.getDocAnnotations, editorAnnotations]);
 
   // Quick-save handlers for export dropdown and keyboard shortcut
   const handleDownloadAnnotations = () => {
@@ -1107,7 +1115,7 @@ const App: React.FC = () => {
               <>
                 <button
                   onClick={() => {
-                    if (annotations.length === 0) {
+                    if (annotations.length === 0 && editorAnnotations.length === 0) {
                       setShowFeedbackPrompt(true);
                     } else if (annotateMode) {
                       handleAnnotateFeedback();
@@ -1440,6 +1448,8 @@ const App: React.FC = () => {
             shareUrl={shareUrl}
             sharingEnabled={sharingEnabled}
             width={panelResize.width}
+            editorAnnotations={editorAnnotations}
+            onDeleteEditorAnnotation={deleteEditorAnnotation}
           />
         </div>
 

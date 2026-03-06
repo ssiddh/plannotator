@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Annotation, AnnotationType, Block } from '../types';
+import { Annotation, AnnotationType, Block, type EditorAnnotation } from '../types';
 import { isCurrentUser } from '../utils/identity';
 import { ImageThumbnail } from './ImageThumbnail';
+import { EditorAnnotationCard } from './EditorAnnotationCard';
 
 interface PanelProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface PanelProps {
   shareUrl?: string;
   sharingEnabled?: boolean;
   width?: number;
+  editorAnnotations?: EditorAnnotation[];
+  onDeleteEditorAnnotation?: (id: string) => void;
 }
 
 export const AnnotationPanel: React.FC<PanelProps> = ({
@@ -27,9 +30,12 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   shareUrl,
   sharingEnabled = true,
   width,
+  editorAnnotations,
+  onDeleteEditorAnnotation,
 }) => {
   const [copied, setCopied] = useState(false);
   const sortedAnnotations = [...annotations].sort((a, b) => a.createdA - b.createdA);
+  const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
 
   const handleQuickShare = async () => {
     if (!shareUrl) return;
@@ -53,14 +59,14 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
             Annotations
           </h2>
           <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-            {annotations.length}
+            {totalCount}
           </span>
         </div>
       </div>
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-        {sortedAnnotations.length === 0 ? (
+        {totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-center px-4">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
               <svg className="w-5 h-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -72,21 +78,41 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
             </p>
           </div>
         ) : (
-          sortedAnnotations.map(ann => (
-            <AnnotationCard
-              key={ann.id}
-              annotation={ann}
-              isSelected={selectedId === ann.id}
-              onSelect={() => onSelect(ann.id)}
-              onDelete={() => onDelete(ann.id)}
-              onEdit={onEdit ? (updates: Partial<Annotation>) => onEdit(ann.id, updates) : undefined}
-            />
-          ))
+          <>
+            {sortedAnnotations.map(ann => (
+              <AnnotationCard
+                key={ann.id}
+                annotation={ann}
+                isSelected={selectedId === ann.id}
+                onSelect={() => onSelect(ann.id)}
+                onDelete={() => onDelete(ann.id)}
+                onEdit={onEdit ? (updates: Partial<Annotation>) => onEdit(ann.id, updates) : undefined}
+              />
+            ))}
+            {editorAnnotations && editorAnnotations.length > 0 && (
+              <>
+                {sortedAnnotations.length > 0 && (
+                  <div className="flex items-center gap-2 pt-2 pb-1">
+                    <div className="flex-1 border-t border-border/30" />
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">Editor</span>
+                    <div className="flex-1 border-t border-border/30" />
+                  </div>
+                )}
+                {editorAnnotations.map(ann => (
+                  <EditorAnnotationCard
+                    key={ann.id}
+                    annotation={ann}
+                    onDelete={() => onDeleteEditorAnnotation?.(ann.id)}
+                  />
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
 
       {/* Quick Share Footer */}
-      {sharingEnabled && shareUrl && annotations.length > 0 && (
+      {sharingEnabled && shareUrl && totalCount > 0 && (
         <div className="p-2 border-t border-border/50">
           <button
             onClick={handleQuickShare}
