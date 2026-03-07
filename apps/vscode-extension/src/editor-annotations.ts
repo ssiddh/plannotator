@@ -101,8 +101,9 @@ export function registerEditorAnnotationCommand(
           comment: reply.text || undefined,
         });
 
-        const responseBody = await postToProxy(
+        const responseBody = await requestProxy(
           activeProxyPort,
+          "POST",
           "/api/editor-annotation",
           body,
         );
@@ -146,8 +147,9 @@ export function registerEditorAnnotationCommand(
       const id = threadIds.get(thread);
       if (id) {
         try {
-          await deleteFromProxy(
+          await requestProxy(
             activeProxyPort,
+            "DELETE",
             `/api/editor-annotation?id=${encodeURIComponent(id)}`,
           );
         } catch (err) {
@@ -284,50 +286,21 @@ function disposeAllThreads(): void {
 
 // ── HTTP helpers ───────────────────────────────────────────────────
 
-function postToProxy(
+function requestProxy(
   port: number,
+  method: string,
   urlPath: string,
-  body: string,
+  body?: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path: urlPath,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk: string) => (data += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(data);
-          } else {
-            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-          }
-        });
-      },
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
-}
+    const headers: Record<string, string | number> = {};
+    if (body) {
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(body);
+    }
 
-function deleteFromProxy(port: number, urlPath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
     const req = http.request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path: urlPath,
-        method: "DELETE",
-      },
+      { hostname: "127.0.0.1", port, path: urlPath, method, headers },
       (res) => {
         let data = "";
         res.on("data", (chunk: string) => (data += chunk));
@@ -341,6 +314,7 @@ function deleteFromProxy(port: number, urlPath: string): Promise<string> {
       },
     );
     req.on("error", reject);
+    if (body) req.write(body);
     req.end();
   });
 }

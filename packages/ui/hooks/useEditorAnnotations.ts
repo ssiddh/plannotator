@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EditorAnnotation } from '../types';
 
-const POLL_INTERVAL = 2000;
+const POLL_INTERVAL = 500;
 const IS_VSCODE = typeof window !== 'undefined' && (window as any).__PLANNOTATOR_VSCODE === true;
 
 interface UseEditorAnnotationsReturn {
@@ -25,7 +25,11 @@ export function useEditorAnnotations(): UseEditorAnnotationsReturn {
       const res = await fetch('/api/editor-annotations');
       if (!res.ok) return;
       const data = await res.json();
-      setAnnotations(data.annotations ?? []);
+      const incoming: EditorAnnotation[] = data.annotations ?? [];
+      setAnnotations((prev) => {
+        if (prev.length === incoming.length && prev.every((a, i) => a.id === incoming[i].id)) return prev;
+        return incoming;
+      });
     } catch {
       // Silently fail — next poll will retry
     }
