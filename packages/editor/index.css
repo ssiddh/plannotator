@@ -145,6 +145,20 @@ pre code.hljs {
   line-height: 1.6;
 }
 
+/* Fix: hljs markdown grammar applies github-dark token colors that are unreadable
+   in light mode. Emphasis/strong/code tokens use #c9d1d9 or #8b949e which wash out
+   against light backgrounds. Force them to inherit the base code color. */
+pre code.hljs .hljs-emphasis {
+  color: inherit !important;
+  font-style: normal !important;
+}
+pre code.hljs .hljs-strong {
+  color: inherit !important;
+}
+pre code.hljs .hljs-code {
+  color: inherit !important;
+}
+
 /* Light mode code - override hljs dark theme */
 .light pre code.hljs {
   color: oklch(0.25 0.02 260) !important;
