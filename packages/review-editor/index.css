@@ -348,11 +348,15 @@ diffs-container {
 }
 
 .file-tree-item.staged {
-  border-left: 2px solid var(--primary);
+  background: oklch(from var(--success) l c h / 0.1);
+}
+
+.file-tree-item.staged:hover {
+  background: var(--muted);
 }
 
 .file-tree-item.staged.active {
-  border-left-color: var(--primary-foreground);
+  background: var(--primary);
 }
 
 /* Annotation toolbar for code review */
