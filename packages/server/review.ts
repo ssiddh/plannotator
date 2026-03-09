@@ -10,7 +10,7 @@
  */
 
 import { isRemoteSession, getServerPort } from "./remote";
-import { type DiffType, type GitContext, runGitDiff, getFileContentsForDiff, gitAddFile, gitResetFile, parseWorktreeDiffType } from "./git";
+import { type DiffType, type GitContext, runGitDiff, getFileContentsForDiff, gitAddFile, gitResetFile, parseWorktreeDiffType, validateFilePath } from "./git";
 import { getRepoInfo } from "./repo";
 import { handleImage, handleUpload, handleAgents, handleServerReady, handleDraftSave, handleDraftLoad, handleDraftDelete, type OpencodeClient } from "./shared-handlers";
 import { contentHash, deleteDraft } from "./draft";
@@ -182,12 +182,14 @@ export async function startReviewServer(
             if (!filePath) {
               return Response.json({ error: "Missing path" }, { status: 400 });
             }
-            if (filePath.includes("..") || filePath.startsWith("/")) {
+            try { validateFilePath(filePath); } catch {
               return Response.json({ error: "Invalid path" }, { status: 400 });
             }
             const oldPath = url.searchParams.get("oldPath") || undefined;
-            if (oldPath && (oldPath.includes("..") || oldPath.startsWith("/"))) {
-              return Response.json({ error: "Invalid path" }, { status: 400 });
+            if (oldPath) {
+              try { validateFilePath(oldPath); } catch {
+                return Response.json({ error: "Invalid path" }, { status: 400 });
+              }
             }
             const defaultBranch = gitContext?.defaultBranch || "main";
             const result = await getFileContentsForDiff(

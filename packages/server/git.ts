@@ -397,7 +397,7 @@ export async function getFileContentsForDiff(
  * Validate a file path for git operations.
  * Rejects path traversal and absolute paths.
  */
-function validateFilePath(filePath: string): void {
+export function validateFilePath(filePath: string): void {
   if (filePath.includes("..") || filePath.startsWith("/")) {
     throw new Error("Invalid file path");
   }

@@ -145,12 +145,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
           </span>
           <div className="flex items-center gap-1.5">
             {stagedFiles && stagedFiles.size > 0 && (
-              <span className="text-xs text-primary font-medium">
-                {stagedFiles.size} added
-              </span>
-            )}
-            {stagedFiles && stagedFiles.size > 0 && (
-              <span className="text-muted-foreground/40">·</span>
+              <>
+                <span className="text-xs text-primary font-medium">
+                  {stagedFiles.size} added
+                </span>
+                <span className="text-muted-foreground/40">·</span>
+              </>
             )}
             <span className="text-xs text-muted-foreground">
               {viewedFiles.size}/{files.length}

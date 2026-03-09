@@ -363,9 +363,13 @@ const ReviewApp: React.FC = () => {
   }, [diffType]);
 
   // Git add/staging logic
+  const handleFileViewedFromStage = useCallback(
+    (path: string) => setViewedFiles(prev => new Set(prev).add(path)),
+    [],
+  );
   const { stagedFiles, stagingFile, canStageFiles, stageFile, resetStagedFiles, stageError } = useGitAdd({
     activeDiffBase,
-    onFileViewed: (path) => setViewedFiles(prev => new Set(prev).add(path)),
+    onFileViewed: handleFileViewedFromStage,
   });
 
   // Shared helper: fetch a diff switch and update state

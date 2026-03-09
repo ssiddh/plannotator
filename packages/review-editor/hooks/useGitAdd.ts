@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 interface UseGitAddOptions {
   activeDiffBase: string;
@@ -20,13 +20,19 @@ export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): U
   const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
   const [stagingFile, setStagingFile] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const canStageFiles = useMemo(() => STAGEABLE_DIFF_TYPES.has(activeDiffBase), [activeDiffBase]);
+  const canStageFiles = STAGEABLE_DIFF_TYPES.has(activeDiffBase);
+
+  // Use a ref so stageFile doesn't need stagedFiles in its dependency array
+  const stagedFilesRef = useRef(stagedFiles);
+  stagedFilesRef.current = stagedFiles;
 
   const stageFile = useCallback(async (filePath: string) => {
-    const isUndo = stagedFiles.has(filePath);
+    const isUndo = stagedFilesRef.current.has(filePath);
     setStagingFile(filePath);
     setStageError(null);
+    clearTimeout(errorTimeoutRef.current);
 
     try {
       const res = await fetch('/api/git-add', {
@@ -57,15 +63,16 @@ export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): U
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Git add failed';
       setStageError(message);
-      setTimeout(() => setStageError(null), 3000);
+      errorTimeoutRef.current = setTimeout(() => setStageError(null), 3000);
     } finally {
       setStagingFile(null);
     }
-  }, [stagedFiles, onFileViewed]);
+  }, [onFileViewed]);
 
   const resetStagedFiles = useCallback(() => {
     setStagedFiles(new Set());
     setStageError(null);
+    clearTimeout(errorTimeoutRef.current);
   }, []);
 
   return { stagedFiles, stagingFile, canStageFiles, stageFile, resetStagedFiles, stageError };
