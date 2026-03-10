@@ -101,7 +101,7 @@ Coming soon.
 
 ## Codex
 
-No plugin or skill required — Codex runs `plannotator` as a normal shell command. Plan mode is not yet supported.
+Plan mode is not yet supported.
 
 Install the binary, then use it directly:
 

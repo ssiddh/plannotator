@@ -146,7 +146,7 @@ plannotator review           # Code review for current changes
 plannotator annotate file.md # Annotate a markdown file
 ```
 
-No plugin or skill configuration needed — Codex runs `plannotator` as a normal shell command. Plan mode is not yet supported.
+Plan mode is not yet supported.
 
 See [apps/codex/README.md](apps/codex/README.md) for details.
 
