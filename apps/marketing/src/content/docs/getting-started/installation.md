@@ -105,7 +105,7 @@ Plan mode is not yet supported.
 
 Install the binary, then use it directly:
 
-```bash
-plannotator review           # Code review for current changes
-plannotator annotate file.md # Annotate a markdown file
+```
+!plannotator review           # Code review for current changes
+!plannotator annotate file.md # Annotate a markdown file
 ```

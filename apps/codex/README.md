@@ -20,20 +20,20 @@ irm https://plannotator.ai/install.ps1 | iex
 
 ### Code Review
 
-Run `plannotator review` to open the code review UI for your current changes:
+Run `!plannotator review` to open the code review UI for your current changes:
 
-```bash
-plannotator review
+```
+!plannotator review
 ```
 
 This captures your git diff, opens a browser with the review UI, and waits for your feedback. When you submit annotations, the feedback is printed to stdout.
 
 ### Annotate Markdown
 
-Run `plannotator annotate` to annotate any markdown file:
+Run `!plannotator annotate` to annotate any markdown file:
 
-```bash
-plannotator annotate path/to/file.md
+```
+!plannotator annotate path/to/file.md
 ```
 
 ## Environment Variables

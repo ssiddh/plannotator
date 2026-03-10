@@ -141,9 +141,9 @@ irm https://plannotator.ai/install.ps1 | iex
 
 **Then in Codex, run directly:**
 
-```bash
-plannotator review           # Code review for current changes
-plannotator annotate file.md # Annotate a markdown file
+```
+!plannotator review           # Code review for current changes
+!plannotator annotate file.md # Annotate a markdown file
 ```
 
 Plan mode is not yet supported.
