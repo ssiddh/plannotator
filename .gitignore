@@ -19,13 +19,15 @@ dist-ssr
 # VS Code extension package
 *.vsix
 
-# OpenCode plugin build artifacts (generated from hook/review dist)
+# OpenCode plugin build artifacts (generated from hook/review/checklist dist)
 apps/opencode-plugin/plannotator.html
 apps/opencode-plugin/review-editor.html
+apps/opencode-plugin/checklist.html
 
-# Pi extension build artifacts (generated from hook/review dist)
+# Pi extension build artifacts (generated from hook/review/checklist dist)
 apps/pi-extension/plannotator.html
 apps/pi-extension/review-editor.html
+apps/pi-extension/checklist.html
 
 # Editor directories and files
 .vscode/*
