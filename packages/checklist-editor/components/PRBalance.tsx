@@ -257,7 +257,7 @@ export const PRBalance: React.FC<PRBalanceProps> = ({ fileDiffs }) => {
             Center of mass
           </text>
           <text x={comX} y={BEAM_Y + 60} textAnchor="middle" className="fill-warning" fontSize={12}>
-            {pctNew >= 50 ? `${pctNew}% of weight is new code` : `${100 - pctNew}% of weight is modified code`}
+            {pctNew >= 50 ? `${pctNew}% of weight is new files` : `${100 - pctNew}% of weight is modified files`}
           </text>
         </g>
 
