@@ -15,6 +15,10 @@ export interface ChecklistItem {
   reason: string;
   /** Related file paths from the diff */
   files?: string[];
+  /** Maps file path → number of diff hunks this item covers.
+   *  Paths must be keys in Checklist.fileDiffs.
+   *  Multiple items can cover the same hunks (many-to-many). */
+  diffMap?: Record<string, number>;
   /** True if failure means data loss, security breach, or broken deploy */
   critical?: boolean;
 }
@@ -42,6 +46,9 @@ export interface Checklist {
   items: ChecklistItem[];
   /** Optional associated pull/merge request */
   pr?: ChecklistPR;
+  /** Total diff hunks per file path (relative to repo root).
+   *  Presence of this field enables the coverage toggle view. */
+  fileDiffs?: Record<string, number>;
 }
 
 // --- Developer Response ---
@@ -57,6 +64,8 @@ export interface ChecklistItemResult {
   /** Screenshot evidence */
   images?: { path: string; name: string }[];
 }
+
+export type ChecklistViewMode = 'checklist' | 'coverage';
 
 export interface ChecklistSubmission {
   results: ChecklistItemResult[];

@@ -67,7 +67,7 @@ interface StatusButtonProps {
   status: ChecklistItemStatus;
   currentStatus: ChecklistItemStatus;
   onClick: () => void;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 }
 
 const CONFIG: Record<
@@ -106,7 +106,12 @@ export const StatusButton: React.FC<StatusButtonProps> = ({
   if (status === 'pending') return null;
   const cfg = CONFIG[status];
   const isActive = currentStatus === status;
-  const sizeClass = size === 'sm' ? 'px-1.5 py-0.5 text-[10px] gap-0.5' : 'px-2.5 py-1.5 text-xs gap-1.5';
+  const sizeClass = size === 'xs'
+    ? 'p-1'
+    : size === 'sm'
+      ? 'px-1.5 py-0.5 text-[10px] gap-0.5'
+      : 'px-2.5 py-1.5 text-xs gap-1.5';
+  const iconClass = size === 'xs' ? 'w-2.5 h-2.5' : size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5';
 
   return (
     <button
@@ -116,8 +121,8 @@ export const StatusButton: React.FC<StatusButtonProps> = ({
       }`}
       title={`${cfg.label} (${cfg.shortcut})`}
     >
-      <cfg.Icon className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
-      <span>{cfg.label}</span>
+      <cfg.Icon className={iconClass} />
+      {size !== 'xs' && <span>{cfg.label}</span>}
     </button>
   );
 };

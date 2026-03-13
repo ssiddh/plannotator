@@ -114,6 +114,19 @@ export function validateChecklist(data: unknown): string[] {
     }
   }
 
+  // Validate optional fileDiffs field
+  if (obj.fileDiffs !== undefined) {
+    if (typeof obj.fileDiffs !== "object" || obj.fileDiffs === null || Array.isArray(obj.fileDiffs)) {
+      errors.push('"fileDiffs" must be an object mapping file paths to hunk counts.');
+    } else {
+      for (const [key, val] of Object.entries(obj.fileDiffs as Record<string, unknown>)) {
+        if (typeof val !== "number" || val < 1 || !Number.isInteger(val)) {
+          errors.push(`fileDiffs["${key}"] must be a positive integer.`);
+        }
+      }
+    }
+  }
+
   if (!Array.isArray(obj.items)) {
     errors.push('"items" must be an array.');
     return errors;
@@ -149,6 +162,19 @@ export function validateChecklist(data: unknown): string[] {
 
     if (typeof item.reason !== "string" || !item.reason.trim()) {
       errors.push(`${prefix}: missing "reason" (why manual verification is needed).`);
+    }
+
+    // Validate optional diffMap
+    if (item.diffMap !== undefined) {
+      if (typeof item.diffMap !== "object" || item.diffMap === null || Array.isArray(item.diffMap)) {
+        errors.push(`${prefix}: "diffMap" must be an object mapping file paths to hunk counts.`);
+      } else {
+        for (const [key, val] of Object.entries(item.diffMap as Record<string, unknown>)) {
+          if (typeof val !== "number" || val < 1 || !Number.isInteger(val)) {
+            errors.push(`${prefix}: diffMap["${key}"] must be a positive integer.`);
+          }
+        }
+      }
     }
   }
 

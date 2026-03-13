@@ -4,6 +4,7 @@ import type { StatusCounts } from '../hooks/useChecklistProgress';
 interface ProgressBarProps {
   counts: StatusCounts;
   stopped?: boolean;
+  className?: string;
 }
 
 function formatElapsed(ms: number): string {
@@ -22,7 +23,7 @@ function formatElapsed(ms: number): string {
   return `${mm}:${ss}`;
 }
 
-export const ProgressBar: React.FC<ProgressBarProps> = ({ counts, stopped }) => {
+export const ProgressBar: React.FC<ProgressBarProps> = ({ counts, stopped, className }) => {
   const { passed, failed, skipped, pending, total } = counts;
   const [elapsed, setElapsed] = useState(0);
   const [startTime] = useState(() => Date.now());
@@ -42,7 +43,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ counts, stopped }) => 
   const pct = (n: number) => `${(n / total) * 100}%`;
 
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5${className ? ` ${className}` : ''}`}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-mono text-muted-foreground/40">
           {formatElapsed(elapsed)}

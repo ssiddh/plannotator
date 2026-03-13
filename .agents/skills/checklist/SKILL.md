@@ -47,6 +47,8 @@ As you read the diff, build a mental model:
 - **Which files changed and what do they do?** UI components need visual verification. API routes need functional testing. Database migrations need data integrity checks. Config files need deployment verification.
 - **Do tests exist for this code?** Look for test files related to the changed code. Tests that meaningfully cover the changed behavior reduce the need for manual verification — but tests that only cover the happy path or assert existence still leave gaps.
 
+As you read the diff, count the number of diff hunks (`@@` markers) per file. You'll use these counts in step 3 to populate `fileDiffs` and `diffMap`.
+
 ### 2. Decide What Needs Manual Verification
 
 Think about each change through the lens of what could go wrong that a human needs to catch. Consider categories like:
@@ -78,6 +80,11 @@ Produce a JSON object with this structure:
     "branch": "feat/oauth2",
     "provider": "github"
   },
+  "fileDiffs": {
+    "src/middleware/auth.ts": 5,
+    "src/pages/login.tsx": 3,
+    "src/lib/api-client.ts": 4
+  },
   "items": [
     {
       "id": "category-N",
@@ -90,7 +97,8 @@ Produce a JSON object with this structure:
         "Step 3: Confirm this specific expectation"
       ],
       "reason": "Why this needs human eyes — what makes it not fully automatable.",
-      "files": ["path/to/relevant/file.ts"],
+      "files": ["src/middleware/auth.ts", "src/pages/login.tsx"],
+      "diffMap": { "src/middleware/auth.ts": 3, "src/pages/login.tsx": 2 },
       "critical": false
     }
   ]
@@ -125,7 +133,9 @@ Produce a JSON object with this structure:
   - How the developer knows the test passes vs fails
 - **`steps`**: Required. Ordered instructions for conducting the verification. Be concrete — "Open browser devtools" not "check the network." Each step should be a single clear action.
 - **`reason`**: One sentence explaining why automation can't fully cover this. "CSS grid rendering varies across browsers" is good. "Because it changed" is not.
-- **`files`**: File paths from the diff that this item relates to. Helps the developer trace your reasoning.
+- **`files`**: File paths from the diff that this item relates to. Helps the developer trace your reasoning. Optional when `diffMap` is provided (derivable from its keys).
+- **`diffMap`**: Object mapping file paths to the number of diff hunks in that file that this check exercises. Paths must be keys in `fileDiffs`. Multiple items can cover the same hunks — that's expected (many-to-many). Example: `{ "src/middleware/auth.ts": 3, "src/pages/login.tsx": 2 }`.
+- **`fileDiffs`** (on the top-level checklist, not per-item): Object mapping each changed file's relative path to its total number of diff hunks. Count `@@` markers per file in the `git diff` output. This enables the coverage visualization toggle in the checklist UI. Example: `{ "src/middleware/auth.ts": 5, "src/pages/login.tsx": 3 }`.
 - **`critical`**: Reserve for items where failure means data loss, security vulnerability, or broken deployment. Typically 0–3 items per checklist.
 
 ### 4. Launch the Checklist UI

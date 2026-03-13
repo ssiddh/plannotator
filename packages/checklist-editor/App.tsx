@@ -9,12 +9,15 @@ import { ChecklistHeader } from './components/ChecklistHeader';
 import { ChecklistGroup } from './components/ChecklistGroup';
 import { ChecklistAnnotationPanel } from './components/ChecklistAnnotationPanel';
 import { ProgressBar } from './components/ProgressBar';
+import { CoverageView } from './components/CoverageView';
+import { ViewModeToggle } from './components/ViewModeToggle';
 import { useChecklistState } from './hooks/useChecklistState';
 import { useChecklistProgress } from './hooks/useChecklistProgress';
 import { useChecklistDraft } from './hooks/useChecklistDraft';
+import { useChecklistCoverage } from './hooks/useChecklistCoverage';
 import { exportChecklistResults } from './utils/exportChecklist';
 import type { Checklist, ChecklistItem, ChecklistItemStatus, ChecklistItemResult } from './hooks/useChecklistState';
-import type { ChecklistPR } from '@plannotator/shared/checklist-types';
+import type { ChecklistPR, ChecklistViewMode } from '@plannotator/shared/checklist-types';
 import type { ChecklistAutomations } from './components/ChecklistAnnotationPanel';
 import type { ImageAttachment } from '@plannotator/ui/types';
 
@@ -32,6 +35,19 @@ const DEMO_CHECKLIST: Checklist = {
     branch: 'feat/oauth2-migration',
     provider: 'github' as const,
   },
+  fileDiffs: {
+    'src/middleware/csrf.ts': 3,
+    'src/middleware/auth.ts': 5,
+    'src/middleware/session-migration.ts': 4,
+    'src/middleware/api-key.ts': 2,
+    'src/routes/api.ts': 2,
+    'src/lib/api-client.ts': 6,
+    'src/hooks/useAuth.ts': 4,
+    'src/pages/login.tsx': 8,
+    'src/auth/providers.ts': 5,
+    'src/components/AuthButton.tsx': 3,
+    'src/components/ErrorMessage.tsx': 2,
+  },
   items: [
     {
       id: 'auth-1',
@@ -46,6 +62,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'CSRF protection is security-critical and automated tests may not catch middleware ordering issues.',
       files: ['src/middleware/csrf.ts', 'src/routes/api.ts'],
+      diffMap: { 'src/middleware/csrf.ts': 3, 'src/routes/api.ts': 2 },
       critical: true,
     },
     {
@@ -61,6 +78,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'Race conditions in token refresh can cause cascading 401s and logout the user.',
       files: ['src/lib/api-client.ts', 'src/hooks/useAuth.ts'],
+      diffMap: { 'src/lib/api-client.ts': 4, 'src/hooks/useAuth.ts': 3 },
       critical: true,
     },
     {
@@ -76,6 +94,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'Core user flow that must work correctly.',
       files: ['src/pages/login.tsx', 'src/middleware/auth.ts'],
+      diffMap: { 'src/pages/login.tsx': 5, 'src/middleware/auth.ts': 3 },
     },
     {
       id: 'auth-4',
@@ -90,6 +109,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'OAuth flows involve third-party redirects that are difficult to test automatically.',
       files: ['src/auth/providers.ts'],
+      diffMap: { 'src/auth/providers.ts': 5, 'src/pages/login.tsx': 2 },
     },
     {
       id: 'auth-5',
@@ -104,6 +124,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'A forced logout would affect all active users and is unacceptable for a production migration.',
       files: ['src/middleware/session-migration.ts'],
+      diffMap: { 'src/middleware/session-migration.ts': 4, 'src/middleware/auth.ts': 2 },
       critical: true,
     },
     {
@@ -118,6 +139,7 @@ const DEMO_CHECKLIST: Checklist = {
       ],
       reason: 'Breaking API key auth would disrupt automated integrations.',
       files: ['src/middleware/api-key.ts'],
+      diffMap: { 'src/middleware/api-key.ts': 2 },
     },
     {
       id: 'auth-7',
@@ -130,6 +152,7 @@ const DEMO_CHECKLIST: Checklist = {
         'Trigger rate limiting (5+ failed attempts) and verify the message',
       ],
       reason: 'Error copy is hard to verify without visual inspection.',
+      diffMap: { 'src/components/ErrorMessage.tsx': 2, 'src/pages/login.tsx': 1 },
     },
     {
       id: 'auth-8',
@@ -142,6 +165,7 @@ const DEMO_CHECKLIST: Checklist = {
         'Verify there is no layout shift when the spinner appears',
       ],
       reason: 'Loading state polish requires visual verification.',
+      diffMap: { 'src/components/AuthButton.tsx': 3, 'src/lib/api-client.ts': 2, 'src/hooks/useAuth.ts': 1 },
     },
   ],
 };
@@ -220,11 +244,14 @@ const ChecklistAppInner: React.FC<ChecklistAppInnerProps> = ({ checklist, origin
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [notePopover, setNotePopover] = useState<NotePopoverState | null>(null);
   const [automations, setAutomations] = useState<ChecklistAutomations>({ postToPR: false, approveIfAllPass: false });
+  const [viewMode, setViewMode] = useState<ChecklistViewMode>('checklist');
   const documentRef = useRef<HTMLDivElement>(null);
   const globalCommentButtonRef = useRef<HTMLButtonElement>(null);
 
   const state = useChecklistState({ items: checklist.items });
   const { counts, categoryProgress, submitState } = useChecklistProgress(checklist.items, state.results);
+  const coverageData = useChecklistCoverage(checklist.fileDiffs, checklist.items, state.results);
+  const hasCoverage = coverageData !== null;
 
   const panelResize = useResizablePanel({
     storageKey: 'plannotator-checklist-panel-width',
@@ -383,6 +410,8 @@ const ChecklistAppInner: React.FC<ChecklistAppInnerProps> = ({ checklist, origin
   submittedRef.current = submitted;
   const isSubmittingRef = useRef(isSubmitting);
   isSubmittingRef.current = isSubmitting;
+  const hasCoverageRef = useRef(hasCoverage);
+  hasCoverageRef.current = hasCoverage;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -446,6 +475,12 @@ const ChecklistAppInner: React.FC<ChecklistAppInnerProps> = ({ checklist, origin
             }
           }
           break;
+        case 'v':
+          if (hasCoverageRef.current) {
+            e.preventDefault();
+            setViewMode(prev => prev === 'checklist' ? 'coverage' : 'checklist');
+          }
+          break;
         case 'Enter':
           if (s.selectedItemId) {
             e.preventDefault();
@@ -507,46 +542,62 @@ const ChecklistAppInner: React.FC<ChecklistAppInnerProps> = ({ checklist, origin
               <p className="text-sm text-muted-foreground/80 leading-relaxed mb-3">{checklist.summary}</p>
             )}
 
-            {/* Progress bar */}
-            <ProgressBar counts={counts} stopped={!!submitted} />
-
-            {/* Checklist items in glassomorphic surface */}
-            <div className="mt-4 bg-muted/50 rounded-lg p-3 border border-border/30">
-              {/* Global comment button — inside the surface, right-aligned */}
-              <div className="flex justify-end mb-3">
-                <button
-                  ref={globalCommentButtonRef}
-                  onClick={handleOpenGlobalComment}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-card border border-border/50 shadow-sm hover:bg-muted rounded-md transition-colors"
-                  title="Add global comment"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                  </svg>
-                  <span>Global comment</span>
-                </button>
-              </div>
-
-              {state.categories.map(category => {
-                const items = state.groupedItems.get(category);
-                const progress = categoryProgress.get(category);
-                if (!items || !progress) return null;
-                return (
-                  <ChecklistGroup
-                    key={category}
-                    category={category}
-                    items={items}
-                    progress={progress}
-                    expandedItems={expandedItems}
-                    selectedItemId={state.selectedItemId}
-                    onToggleExpand={handleToggleExpand}
-                    onOpenNote={handleOpenNote}
-                    getResult={state.getResult}
-                    onSetStatus={state.setStatus}
-                  />
-                );
-              })}
+            {/* Toggle + Progress bar */}
+            <div className="flex items-center gap-3">
+              {hasCoverage && <ViewModeToggle mode={viewMode} onModeChange={setViewMode} />}
+              <ProgressBar counts={counts} stopped={!!submitted} className="flex-1" />
             </div>
+
+            {/* View content — swaps between checklist items and coverage */}
+            {viewMode === 'coverage' && coverageData ? (
+              <CoverageView
+                coverageData={coverageData}
+                items={checklist.items}
+                categories={state.categories}
+                groupedItems={state.groupedItems}
+                selectedItemId={state.selectedItemId}
+                getResult={state.getResult}
+                onSetStatus={state.setStatus}
+                onSelectItem={state.selectItem}
+              />
+            ) : (
+              <div className="mt-4 bg-muted/50 rounded-lg p-3 border border-border/30">
+                {/* Global comment button — inside the surface, right-aligned */}
+                <div className="flex justify-end mb-3">
+                  <button
+                    ref={globalCommentButtonRef}
+                    onClick={handleOpenGlobalComment}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-card border border-border/50 shadow-sm hover:bg-muted rounded-md transition-colors"
+                    title="Add global comment"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                    </svg>
+                    <span>Global comment</span>
+                  </button>
+                </div>
+
+                {state.categories.map(category => {
+                  const items = state.groupedItems.get(category);
+                  const progress = categoryProgress.get(category);
+                  if (!items || !progress) return null;
+                  return (
+                    <ChecklistGroup
+                      key={category}
+                      category={category}
+                      items={items}
+                      progress={progress}
+                      expandedItems={expandedItems}
+                      selectedItemId={state.selectedItemId}
+                      onToggleExpand={handleToggleExpand}
+                      onOpenNote={handleOpenNote}
+                      getResult={state.getResult}
+                      onSetStatus={state.setStatus}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -616,7 +667,7 @@ const ChecklistAppInner: React.FC<ChecklistAppInnerProps> = ({ checklist, origin
       {/* Demo mode toast */}
       {!origin && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-popover border border-border shadow-xl text-[10px] text-muted-foreground animate-in fade-in slide-in-from-bottom-2">
-          Demo mode — <kbd className="px-1 py-0.5 rounded bg-muted font-mono">j</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">k</kbd> navigate, <kbd className="px-1 py-0.5 rounded bg-muted font-mono">p</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">f</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">s</kbd> set status, <kbd className="px-1 py-0.5 rounded bg-muted font-mono">Enter</kbd> expand
+          Demo mode — <kbd className="px-1 py-0.5 rounded bg-muted font-mono">j</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">k</kbd> navigate, <kbd className="px-1 py-0.5 rounded bg-muted font-mono">p</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">f</kbd>/<kbd className="px-1 py-0.5 rounded bg-muted font-mono">s</kbd> set status, <kbd className="px-1 py-0.5 rounded bg-muted font-mono">Enter</kbd> expand{hasCoverage && <>, <kbd className="px-1 py-0.5 rounded bg-muted font-mono">v</kbd> coverage</>}
         </div>
       )}
     </div>
