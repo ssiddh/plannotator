@@ -41,7 +41,7 @@ export const CoverageView: React.FC<CoverageViewProps> = ({
   onSetStatus,
   onSelectItem,
 }) => {
-  const [layout, setLayout] = useState<CoverageLayout>('stacked');
+  const [layout, setLayout] = useState<CoverageLayout>('side-by-side');
   const isSideBySide = layout === 'side-by-side';
 
   return (
@@ -99,11 +99,6 @@ export const CoverageView: React.FC<CoverageViewProps> = ({
 
         {/* Task list */}
         <div className={`bg-card rounded-md border border-border/20 overflow-hidden ${isSideBySide ? 'flex-[2] min-w-0' : 'mt-3'}`}>
-          <div className="px-3 py-1.5 border-b border-border/20">
-            <span className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground/50">
-              Tasks
-            </span>
-          </div>
           <CoverageTaskList
             items={items}
             categories={categories}
