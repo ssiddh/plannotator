@@ -79,7 +79,9 @@ export function openBrowser(url: string): void {
       args = [url];
     }
 
-    spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+    child.once("error", () => {});
+    child.unref();
   } catch {
     // Silently fail
   }
