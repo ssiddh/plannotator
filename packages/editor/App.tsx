@@ -402,7 +402,7 @@ const App: React.FC = () => {
     }
 
     const octSettings = getOctarineSettings();
-    if (octSettings.autoSave && octSettings.enabled && octSettings.workspace) {
+    if (octSettings.autoSave && isOctarineConfigured()) {
       body.octarine = {
         plan: markdown,
         workspace: octSettings.workspace,
@@ -539,7 +539,7 @@ const App: React.FC = () => {
         };
       }
 
-      if (octarineSettings.enabled && octarineSettings.workspace) {
+      if (isOctarineConfigured()) {
         body.octarine = {
           plan: markdown,
           workspace: octarineSettings.workspace,
