@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 import {
@@ -23,14 +23,10 @@ afterEach(() => {
 });
 
 describe("getPlanDirectory", () => {
-  test("creates and returns the plan directory", () => {
-    const homeDir = makeTempDir();
-    const planDir = getPlanDirectory(homeDir);
-
-    expect(planDir).toBe(
-      path.join(homeDir, ".plannotator", "session-plans", "opencode"),
-    );
-    expect(existsSync(planDir)).toBe(true);
+  test("returns XDG-based opencode plans path", () => {
+    const planDir = getPlanDirectory();
+    const expectedDataHome = process.env.XDG_DATA_HOME || path.join(require("os").homedir(), ".local", "share");
+    expect(planDir).toBe(path.join(expectedDataHome, "opencode", "plans"));
   });
 });
 

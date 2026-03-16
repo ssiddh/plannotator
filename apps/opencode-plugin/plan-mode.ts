@@ -1,15 +1,20 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from "fs";
+import { existsSync, readFileSync, realpathSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 
-const PLAN_DIR_SEGMENTS = [".plannotator", "session-plans", "opencode"];
-
 // ── Directory ─────────────────────────────────────────────────────────────
 
-export function getPlanDirectory(homeDirectory: string = homedir()): string {
-  const dir = path.join(homeDirectory, ...PLAN_DIR_SEGMENTS);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+/**
+ * Returns the OpenCode plans directory path.
+ * Matches OpenCode's own resolution: $XDG_DATA_HOME/opencode/plans
+ * (defaults to ~/.local/share/opencode/plans on all platforms).
+ *
+ * We use this path because OpenCode's plan mode permission ruleset
+ * only allows edits to .opencode/plans/*.md and this XDG path.
+ */
+export function getPlanDirectory(): string {
+  const dataHome = process.env.XDG_DATA_HOME || path.join(homedir(), ".local", "share");
+  return path.join(dataHome, "opencode", "plans");
 }
 
 // ── Path validation ───────────────────────────────────────────────────────
