@@ -1,11 +1,8 @@
 /**
- * useAnnotationHighlighter — shared annotation infrastructure for Viewer and PlanCleanDiffView.
+ * useAnnotationHighlighter — annotation infrastructure for Viewer.
  *
  * Manages: web-highlighter lifecycle, toolbar/popover/quicklabel state,
  * annotation creation, text-based restoration (drafts/shares), scroll-to-selected.
- *
- * Extension point: `resolveContext` callback lets diff view tag annotations
- * with their diff section (added/removed/modified).
  */
 
 import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
@@ -46,8 +43,6 @@ export interface UseAnnotationHighlighterOptions {
   selectedAnnotationId: string | null;
   mode: EditorMode;
   enabled?: boolean;
-  /** Extension point: resolve extra context from the highlight DOM element (e.g. diff section) */
-  resolveContext?: (el: HTMLElement) => Annotation['diffContext'];
 }
 
 export interface UseAnnotationHighlighterReturn {
@@ -79,13 +74,11 @@ export function useAnnotationHighlighter({
   selectedAnnotationId,
   mode,
   enabled = true,
-  resolveContext,
 }: UseAnnotationHighlighterOptions): UseAnnotationHighlighterReturn {
   const highlighterRef = useRef<Highlighter | null>(null);
   const modeRef = useRef<EditorMode>(mode);
   const onAddAnnotationRef = useRef(onAddAnnotation);
   const onSelectAnnotationRef = useRef(onSelectAnnotation);
-  const resolveContextRef = useRef(resolveContext);
   const pendingSourceRef = useRef<any>(null);
   const justCreatedIdRef = useRef<string | null>(null);
   const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -98,7 +91,6 @@ export function useAnnotationHighlighter({
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { onAddAnnotationRef.current = onAddAnnotation; }, [onAddAnnotation]);
   useEffect(() => { onSelectAnnotationRef.current = onSelectAnnotation; }, [onSelectAnnotation]);
-  useEffect(() => { resolveContextRef.current = resolveContext; }, [resolveContext]);
 
   // Track mouse position for quick label picker
   useEffect(() => {
@@ -188,7 +180,6 @@ export function useAnnotationHighlighter({
     const doms = highlighter.getDoms(source.id);
     let blockId = '';
     let startOffset = 0;
-    let diffContext: Annotation['diffContext'];
 
     if (doms?.length > 0) {
       const el = doms[0] as HTMLElement;
@@ -201,10 +192,6 @@ export function useAnnotationHighlighter({
         const blockText = parent.textContent || '';
         const beforeText = blockText.split(source.text)[0];
         startOffset = beforeText?.length || 0;
-      }
-      // Extension point: resolve context (e.g. diff section)
-      if (resolveContextRef.current) {
-        diffContext = resolveContextRef.current(el);
       }
     }
 
@@ -223,7 +210,6 @@ export function useAnnotationHighlighter({
       images,
       ...(isQuickLabel ? { isQuickLabel: true } : {}),
       ...(quickLabelTip ? { quickLabelTip } : {}),
-      ...(diffContext ? { diffContext } : {}),
     };
 
     if (type === AnnotationType.DELETION) {
