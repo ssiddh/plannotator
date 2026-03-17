@@ -50,6 +50,7 @@ import { registerSession, unregisterSession, listSessions } from "@plannotator/s
 import { openBrowser } from "@plannotator/server/browser";
 import { detectProjectName } from "@plannotator/server/project";
 import { planDenyFeedback } from "@plannotator/shared/feedback-templates";
+import { findSessionLogsForCwd, getLastRenderedMessage } from "./session-log";
 import path from "path";
 
 // Embed the built HTML at compile time
@@ -274,6 +275,76 @@ if (args[0] === "sessions") {
   server.stop();
 
   // Output feedback (captured by slash command)
+  console.log(result.feedback || "No feedback provided.");
+  process.exit(0);
+
+} else if (args[0] === "annotate-last") {
+  // ============================================
+  // ANNOTATE LAST MESSAGE MODE
+  // ============================================
+
+  const projectRoot = process.env.PLANNOTATOR_CWD || process.cwd();
+  const candidates = findSessionLogsForCwd(projectRoot);
+
+  if (candidates.length === 0) {
+    console.error("No session logs found for this project.");
+    process.exit(1);
+  }
+
+  if (process.env.PLANNOTATOR_DEBUG) {
+    console.error(`[DEBUG] Project root: ${projectRoot}`);
+    console.error(`[DEBUG] Candidates: ${candidates.join(", ")}`);
+  }
+
+  // Try each candidate (most recent first) until we find a rendered message
+  let lastMessage: ReturnType<typeof getLastRenderedMessage> = null;
+  for (const logPath of candidates) {
+    if (process.env.PLANNOTATOR_DEBUG) {
+      console.error(`[DEBUG] Trying: ${logPath}`);
+    }
+    lastMessage = getLastRenderedMessage(logPath);
+    if (lastMessage) break;
+  }
+
+  if (!lastMessage) {
+    console.error("No rendered assistant message found in session logs.");
+    process.exit(1);
+  }
+
+  if (process.env.PLANNOTATOR_DEBUG) {
+    console.error(`[DEBUG] Found message ${lastMessage.messageId} (${lastMessage.text.length} chars)`);
+  }
+
+  const annotateProject = (await detectProjectName()) ?? "_unknown";
+
+  const server = await startAnnotateServer({
+    markdown: lastMessage.text,
+    filePath: "last-message",
+    origin: "claude-code",
+    sharingEnabled,
+    shareBaseUrl,
+    htmlContent: planHtmlContent,
+    onReady: async (url, isRemote, port) => {
+      handleAnnotateServerReady(url, isRemote, port);
+    },
+  });
+
+  registerSession({
+    pid: process.pid,
+    port: server.port,
+    url: server.url,
+    mode: "annotate",
+    project: annotateProject,
+    startedAt: new Date().toISOString(),
+    label: `annotate-last`,
+  });
+
+  const result = await server.waitForDecision();
+
+  await Bun.sleep(1500);
+
+  server.stop();
+
   console.log(result.feedback || "No feedback provided.");
   process.exit(0);
 
