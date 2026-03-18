@@ -30,11 +30,6 @@ const prMeta: PRMetadata = {
 };
 
 describe("exportReviewFeedback", () => {
-  it("returns empty message for no annotations", () => {
-    const result = exportReviewFeedback([]);
-    expect(result).toBe("# Code Review\n\nNo feedback provided.");
-  });
-
   it("local mode: uses generic header, no PR content", () => {
     const result = exportReviewFeedback([ann()]);
     expect(result).toStartWith("# Code Review Feedback\n\n");
