@@ -1,22 +1,25 @@
 /**
  * Plannotator Plugin for OpenCode
  *
- * Provides interactive browser-based plan review via two tools:
- * - submit_plan(plan): Submit plan text directly for review (works from any agent)
- * - submit_plan_file(path): Submit a plan file from disk for review (for file-based workflows)
+ * Provides interactive browser-based plan review via a single tool:
+ *   submit_plan(plan) — accepts either markdown text or a file path
  *
- * The agent chooses which tool fits the context. Both open the same review UI.
+ * First submission: agent passes plan as text. On deny, the response includes
+ * the path where the plan was saved, enabling the agent to use Edit for targeted
+ * revisions and resubmit with the file path.
  *
  * Environment variables:
  *   PLANNOTATOR_REMOTE - Set to "1" or "true" for remote mode (devcontainer, SSH)
  *   PLANNOTATOR_PORT   - Fixed port to use (default: random locally, 19432 for remote)
  *   PLANNOTATOR_PLAN_TIMEOUT_SECONDS - Max wait for approval (default: 345600, set 0 to disable)
- *   PLANNOTATOR_ALLOW_SUBAGENTS - Set to "1" to allow subagents to see plan tools
+ *   PLANNOTATOR_ALLOW_SUBAGENTS - Set to "1" to allow subagents to see submit_plan
  *
  * @packageDocumentation
  */
 
 import { type Plugin, tool } from "@opencode-ai/plugin";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
 import {
   startPlannotatorServer,
   handleServerReady,
@@ -38,8 +41,6 @@ import {
 } from "./commands";
 import { planDenyFeedback } from "@plannotator/shared/feedback-templates";
 import {
-  getPlanDirectory,
-  validatePlanPath,
   stripConflictingPlanModeRules,
 } from "./plan-mode";
 
@@ -53,29 +54,54 @@ const reviewHtmlContent = reviewHtml as unknown as string;
 
 const DEFAULT_PLAN_TIMEOUT_SECONDS = 345_600; // 96 hours
 
-const PLAN_TOOLS = ["submit_plan", "submit_plan_file"];
+// ── Auto-detection ────────────────────────────────────────────────────────
+
+/**
+ * Detect whether the submit_plan argument is a file path or plan text.
+ * A file path must be absolute, end in .md, and exist on disk.
+ * Plan text (markdown) virtually never satisfies all three conditions.
+ */
+function isFilePath(value: string): boolean {
+  return path.isAbsolute(value) && value.endsWith(".md") && existsSync(value);
+}
+
+/**
+ * Resolve the plan content from the submit_plan argument.
+ * Returns the markdown text and optionally the source file path.
+ */
+function resolvePlanContent(plan: string): { content: string; filePath?: string } {
+  if (isFilePath(plan)) {
+    const content = readFileSync(plan, "utf-8");
+    if (!content.trim()) {
+      throw new Error(`Plan file at ${plan} is empty. Write your plan content first, then call submit_plan.`);
+    }
+    return { content, filePath: plan };
+  }
+  return { content: plan };
+}
 
 // ── Planning prompt ───────────────────────────────────────────────────────
 
 /**
- * Unified planning prompt injected for all primary agents (not just plan mode).
+ * Unified planning prompt injected for all primary agents.
  *
- * Design principles (from skill-creator methodology):
- * - Explain the WHY, not just the what — the model is smart, give it context
+ * Design principles:
+ * - Explain the WHY — the model is smart, give it context
  * - Keep it lean — every line should pull its weight
  * - Don't overfit — let the agent and user dictate the workflow
- * - Trust the model — no redundant summaries or heavy-handed MUSTs
+ * - One tool, two modes — text for first submission, file path for revisions
  */
-function getPlanningPrompt(planDir: string): string {
+function getPlanningPrompt(): string {
   return `## Plannotator — Plan Review
 
-You have two plan submission tools. Both open the same interactive review UI where the user can annotate, approve, or request changes.
+You have a plan submission tool called \`submit_plan\`. It opens an interactive review UI where the user can annotate, approve, or request changes.
 
-**\`submit_plan(plan)\`** — Pass the plan as markdown text. Use this for most planning tasks — it's simple and works from any agent. Good for quick plans, iterative planning sessions, or when the user hasn't asked for file-based plans.
+**How to use it:**
 
-**\`submit_plan_file(path)\`** — Pass an absolute path to a plan file on disk. Use this when the user wants plans persisted as files, or for long/complex plans that benefit from file-based editing. Write plan files to \`${planDir}\`.
+- **First submission**: Pass your plan as markdown text — \`submit_plan(plan: "# My Plan\\n...")\`. This is the simplest path and works from any agent.
+- **After rejection**: The rejection message includes a file path where your plan was saved. You can edit that file to make targeted changes, then pass the file path — \`submit_plan(plan: "/path/to/plan.md")\`. This avoids rewriting the entire plan from scratch.
 
-Let the context guide which tool to use. If the user asks you to write a plan to a file, use \`submit_plan_file\`. If the user just asks you to plan something, \`submit_plan\` is usually the right choice.
+The tool auto-detects whether you passed text or a file path. Both open the same review UI.
 
 ### Planning well
 
@@ -83,122 +109,11 @@ Before writing a plan, understand what you're planning for. Read the relevant co
 
 If you need information only the user can provide (requirements, preferences, tradeoffs), ask using the \`question\` tool.
 
-### When the plan is rejected
-
-The user's annotated feedback tells you what to change. Revise and resubmit using the same tool you used before. If you used \`submit_plan_file\`, edit the same file and resubmit its path.
-
 ### What NOT to do
 
 - Don't proceed with implementation until the plan is approved.
-- Don't use \`plan_exit\` — it's been replaced by the submit tools above.
+- Don't use \`plan_exit\` — use \`submit_plan\` instead.
 - Don't end your turn without either submitting a plan or asking the user a question.`;
-}
-
-// ── Shared server helpers ─────────────────────────────────────────────────
-
-interface PlanServerDeps {
-  getSharingEnabled: () => Promise<boolean>;
-  getShareBaseUrl: () => string | undefined;
-  getPlanTimeoutSeconds: () => number | null;
-  client: any;
-}
-
-async function startPlanServer(
-  planContent: string,
-  deps: PlanServerDeps,
-) {
-  const sharingEnabled = await deps.getSharingEnabled();
-  return startPlannotatorServer({
-    plan: planContent,
-    origin: "opencode",
-    sharingEnabled,
-    shareBaseUrl: deps.getShareBaseUrl(),
-    htmlContent,
-    opencodeClient: deps.client,
-    onReady: async (url, isRemote, port) => {
-      handleServerReady(url, isRemote, port);
-      if (isRemote && sharingEnabled) {
-        await writeRemoteShareLink(planContent, deps.getShareBaseUrl(), "review the plan", "plan only").catch(() => {});
-      }
-    },
-  });
-}
-
-async function waitForDecision(
-  server: Awaited<ReturnType<typeof startPlannotatorServer>>,
-  timeoutSeconds: number | null,
-) {
-  const timeoutMs = timeoutSeconds === null ? null : timeoutSeconds * 1000;
-
-  const result = timeoutMs === null
-    ? await server.waitForDecision()
-    : await new Promise<Awaited<ReturnType<typeof server.waitForDecision>>>((resolve) => {
-        const timeoutId = setTimeout(
-          () =>
-            resolve({
-              approved: false,
-              feedback: `[Plannotator] No response within ${timeoutSeconds} seconds. Port released automatically. Please call the submit tool again.`,
-            }),
-          timeoutMs
-        );
-
-        server.waitForDecision().then((r) => {
-          clearTimeout(timeoutId);
-          resolve(r);
-        });
-      });
-
-  await Bun.sleep(1500);
-  server.stop();
-  return result;
-}
-
-async function handleApproval(
-  result: Awaited<ReturnType<typeof startPlannotatorServer>>["waitForDecision"] extends () => Promise<infer R> ? R : never,
-  context: { sessionID: string },
-  client: any,
-  savedPath?: string,
-) {
-  const shouldSwitchAgent = result.agentSwitch && result.agentSwitch !== 'disabled';
-  const targetAgent = result.agentSwitch || 'build';
-
-  if (shouldSwitchAgent) {
-    try {
-      await client.tui.executeCommand({
-        body: { command: "agent_cycle" },
-      });
-    } catch {
-      // Silently fail
-    }
-
-    try {
-      await client.session.prompt({
-        path: { id: context.sessionID },
-        body: {
-          agent: targetAgent,
-          noReply: true,
-          parts: [{ type: "text", text: "Proceed with implementation" }],
-        },
-      });
-    } catch {
-      // Silently fail if session is busy
-    }
-  }
-
-  if (result.feedback) {
-    return `Plan approved with notes!
-${savedPath ? `Saved to: ${savedPath}` : ""}
-
-## Implementation Notes
-
-The user approved your plan but added the following notes to consider during implementation:
-
-${result.feedback}
-
-Proceed with implementation, incorporating these notes where applicable.`;
-  }
-
-  return `Plan approved!${savedPath ? ` Saved to: ${savedPath}` : ""}`;
 }
 
 // ── Plugin ────────────────────────────────────────────────────────────────
@@ -245,23 +160,15 @@ export const PlannotatorPlugin: Plugin = async (ctx) => {
     return val === "1" || val === "true";
   }
 
-  const serverDeps: PlanServerDeps = {
-    getSharingEnabled,
-    getShareBaseUrl,
-    getPlanTimeoutSeconds,
-    client: ctx.client,
-  };
-
   return {
-    // Register plan tools as primary-only (hidden from sub-agents by default)
+    // Register submit_plan as primary-only tool (hidden from sub-agents by default)
     config: async (opencodeConfig) => {
       if (!allowSubagents()) {
         const existingPrimaryTools = opencodeConfig.experimental?.primary_tools ?? [];
-        const toolsToAdd = PLAN_TOOLS.filter(t => !existingPrimaryTools.includes(t));
-        if (toolsToAdd.length > 0) {
+        if (!existingPrimaryTools.includes("submit_plan")) {
           opencodeConfig.experimental = {
             ...opencodeConfig.experimental,
-            primary_tools: [...existingPrimaryTools, ...toolsToAdd],
+            primary_tools: [...existingPrimaryTools, "submit_plan"],
           };
         }
       }
@@ -291,11 +198,11 @@ export const PlannotatorPlugin: Plugin = async (ctx) => {
       }
     },
 
-    // Suppress plan_exit — redirect to submit_plan / submit_plan_file
+    // Suppress plan_exit — redirect to submit_plan
     "tool.definition": async (input, output) => {
       if (input.toolID === "plan_exit") {
         output.description =
-          "Do not call this tool. Use submit_plan or submit_plan_file instead — they open a visual review UI for plan approval.";
+          "Do not call this tool. Use submit_plan instead — it opens a visual review UI for plan approval.";
       }
     },
 
@@ -349,15 +256,13 @@ export const PlannotatorPlugin: Plugin = async (ctx) => {
 
       // Plan agent: strip conflicting OpenCode rules, inject full prompt
       if (lastUserAgent === "plan") {
-        const planDir = getPlanDirectory();
         output.system = stripConflictingPlanModeRules(output.system);
-        output.system.push(getPlanningPrompt(planDir));
+        output.system.push(getPlanningPrompt());
         return;
       }
 
       // Other primary agents: same prompt (uniform experience)
-      const planDir = getPlanDirectory();
-      output.system.push(getPlanningPrompt(planDir));
+      output.system.push(getPlanningPrompt());
     },
 
     // Intercept plannotator-last before the agent sees the command
@@ -424,52 +329,117 @@ export const PlannotatorPlugin: Plugin = async (ctx) => {
     },
 
     tool: {
-      // ── submit_plan: text-based (the original, works uniformly) ──────
       submit_plan: tool({
         description:
-          "Submit a plan for interactive user review. Pass the complete plan as markdown text. The user can annotate, approve, or request changes in a visual review UI. Use this for most planning tasks.",
+          "Submit a plan for interactive user review. Pass either the complete plan as markdown text, or an absolute file path to a plan markdown file. The user can annotate, approve, or request changes in a visual review UI.",
         args: {
           plan: tool.schema
             .string()
-            .describe("The complete implementation plan in markdown format."),
+            .describe("The plan — either markdown text or an absolute path to a .md file on disk."),
         },
 
         async execute(args, context) {
-          const server = await startPlanServer(args.plan, serverDeps);
-          const result = await waitForDecision(server, getPlanTimeoutSeconds());
+          // Auto-detect: file path or plan text
+          let planContent: string;
+          let sourceFilePath: string | undefined;
+          try {
+            const resolved = resolvePlanContent(args.plan);
+            planContent = resolved.content;
+            sourceFilePath = resolved.filePath;
+          } catch (err) {
+            return `Error: ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          if (!planContent.trim()) {
+            return "Error: Plan content is empty. Write your plan first, then call submit_plan.";
+          }
+
+          const sharingEnabled = await getSharingEnabled();
+          const server = await startPlannotatorServer({
+            plan: planContent,
+            origin: "opencode",
+            sharingEnabled,
+            shareBaseUrl: getShareBaseUrl(),
+            htmlContent,
+            opencodeClient: ctx.client,
+            onReady: async (url, isRemote, port) => {
+              handleServerReady(url, isRemote, port);
+              if (isRemote && sharingEnabled) {
+                await writeRemoteShareLink(planContent, getShareBaseUrl(), "review the plan", "plan only").catch(() => {});
+              }
+            },
+          });
+
+          const timeoutSeconds = getPlanTimeoutSeconds();
+          const timeoutMs = timeoutSeconds === null ? null : timeoutSeconds * 1000;
+
+          const result = timeoutMs === null
+            ? await server.waitForDecision()
+            : await new Promise<Awaited<ReturnType<typeof server.waitForDecision>>>((resolve) => {
+                const timeoutId = setTimeout(
+                  () =>
+                    resolve({
+                      approved: false,
+                      feedback: `[Plannotator] No response within ${timeoutSeconds} seconds. Port released automatically. Please call submit_plan again.`,
+                    }),
+                  timeoutMs
+                );
+
+                server.waitForDecision().then((r) => {
+                  clearTimeout(timeoutId);
+                  resolve(r);
+                });
+              });
+          await Bun.sleep(1500);
+          server.stop();
 
           if (result.approved) {
-            return handleApproval(result, context, ctx.client, result.savedPath);
+            const shouldSwitchAgent = result.agentSwitch && result.agentSwitch !== 'disabled';
+            const targetAgent = result.agentSwitch || 'build';
+
+            if (shouldSwitchAgent) {
+              try {
+                await ctx.client.tui.executeCommand({
+                  body: { command: "agent_cycle" },
+                });
+              } catch {
+                // Silently fail
+              }
+
+              try {
+                await ctx.client.session.prompt({
+                  path: { id: context.sessionID },
+                  body: {
+                    agent: targetAgent,
+                    noReply: true,
+                    parts: [{ type: "text", text: "Proceed with implementation" }],
+                  },
+                });
+              } catch {
+                // Silently fail if session is busy
+              }
+            }
+
+            if (result.feedback) {
+              return `Plan approved with notes!
+${result.savedPath ? `Saved to: ${result.savedPath}` : ""}
+
+## Implementation Notes
+
+The user approved your plan but added the following notes to consider during implementation:
+
+${result.feedback}
+
+Proceed with implementation, incorporating these notes where applicable.`;
+            }
+
+            return `Plan approved!${result.savedPath ? ` Saved to: ${result.savedPath}` : ""}`;
+          } else {
+            return planDenyFeedback(result.feedback || "", "submit_plan", {
+              planFilePath: sourceFilePath,
+              historyPath: !sourceFilePath ? result.historyPath : undefined,
+            });
           }
-          return planDenyFeedback(result.feedback || "", "submit_plan");
-        },
-      }),
-
-      // ── submit_plan_file: file-based (for persistent plan workflows) ─
-      submit_plan_file: tool({
-        description:
-          "Submit a plan file from disk for interactive user review. Pass the absolute path to a markdown file. Use this when the user wants plans saved as files, or for long plans that benefit from file-based editing. The review UI is the same as submit_plan.",
-        args: {
-          path: tool.schema
-            .string()
-            .describe("Absolute path to the plan markdown file on disk."),
-        },
-
-        async execute(args, context) {
-          const planDir = getPlanDirectory();
-          const validation = validatePlanPath(args.path, planDir);
-
-          if (!validation.ok) {
-            return `Error: ${validation.error}`;
-          }
-
-          const server = await startPlanServer(validation.content, serverDeps);
-          const result = await waitForDecision(server, getPlanTimeoutSeconds());
-
-          if (result.approved) {
-            return handleApproval(result, context, ctx.client, result.savedPath);
-          }
-          return planDenyFeedback(result.feedback || "", "submit_plan_file", { planFilePath: args.path });
         },
       }),
     },
