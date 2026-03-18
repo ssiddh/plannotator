@@ -337,7 +337,7 @@ if (args[0] === "sessions") {
   const server = await startAnnotateServer({
     markdown: lastMessage.text,
     filePath: "last-message",
-    origin: isCodex ? "codex" as any : "claude-code",
+    origin: isCodex ? "codex" : "claude-code",
     mode: "annotate-last",
     sharingEnabled,
     shareBaseUrl,

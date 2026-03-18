@@ -33,7 +33,7 @@ export interface AnnotateServerOptions {
   /** HTML content to serve for the UI */
   htmlContent: string;
   /** Origin identifier for UI customization */
-  origin?: "opencode" | "claude-code" | "pi";
+  origin?: "opencode" | "claude-code" | "pi" | "codex";
   /** UI mode: "annotate" for files, "annotate-last" for last agent message */
   mode?: "annotate" | "annotate-last";
   /** Whether URL sharing is enabled (default: true) */
