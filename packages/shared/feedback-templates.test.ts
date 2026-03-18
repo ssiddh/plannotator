@@ -62,13 +62,4 @@ describe("feedback-templates", () => {
     expect(result).toContain("exit_plan_mode");
   });
 
-  test("plan deny can include a history path hint", () => {
-    const result = planDenyFeedback("feedback", "submit_plan", {
-      historyPath: "/home/user/.plannotator/history/myproject/auth-2026-03-18/001.md",
-    });
-
-    expect(result).toContain("/home/user/.plannotator/history/myproject/auth-2026-03-18/001.md");
-    expect(result).toContain("edit this file");
-    expect(result).toContain("submit_plan");
-  });
 });

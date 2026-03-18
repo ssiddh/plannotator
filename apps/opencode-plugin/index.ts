@@ -57,9 +57,9 @@ const DEFAULT_PLAN_TIMEOUT_SECONDS = 345_600; // 96 hours
 // ── Auto-detection ────────────────────────────────────────────────────────
 
 /**
- * Detect whether the submit_plan argument is a file path or plan text.
- * A file path must be absolute, end in .md, and exist on disk.
- * Plan text (markdown) virtually never satisfies all three conditions.
+ * Detect whether the submit_plan argument is a file path.
+ * Must be an absolute path, end in .md, and exist on disk.
+ * Anything that doesn't match is treated as plan text.
  */
 function isFilePath(value: string): boolean {
   return path.isAbsolute(value) && value.endsWith(".md") && existsSync(value);
@@ -76,6 +76,10 @@ function resolvePlanContent(plan: string): { content: string; filePath?: string 
       throw new Error(`Plan file at ${plan} is empty. Write your plan content first, then call submit_plan.`);
     }
     return { content, filePath: plan };
+  }
+  // Catch typos: looks like a file path but doesn't exist
+  if (path.isAbsolute(plan) && plan.endsWith(".md")) {
+    throw new Error(`File not found: ${plan}. Check the path and try again.`);
   }
   return { content: plan };
 }
@@ -98,8 +102,8 @@ You have a plan submission tool called \`submit_plan\`. It opens an interactive 
 
 **How to use it:**
 
-- **First submission**: Pass your plan as markdown text — \`submit_plan(plan: "# My Plan\\n...")\`. This is the simplest path and works from any agent.
-- **After rejection**: The rejection message includes a file path where your plan was saved. You can edit that file to make targeted changes, then pass the file path — \`submit_plan(plan: "/path/to/plan.md")\`. This avoids rewriting the entire plan from scratch.
+- Pass your plan as markdown text — \`submit_plan(plan: "# My Plan\\n...")\`.
+- Or pass an absolute file path to a .md file — \`submit_plan(plan: "/path/to/plan.md")\`.
 
 The tool auto-detects whether you passed text or a file path. Both open the same review UI.
 
@@ -261,8 +265,14 @@ export const PlannotatorPlugin: Plugin = async (ctx) => {
         return;
       }
 
-      // Other primary agents: same prompt (uniform experience)
-      output.system.push(getPlanningPrompt());
+      // Other primary agents: minimal reminder about the tool
+      output.system.push(`## Plan Submission
+
+When you have completed your plan, call the \`submit_plan\` tool to submit it for user review. Pass your plan as markdown text, or pass an absolute file path to a .md file.
+
+The user will review your plan in a visual UI where they can annotate, approve, or request changes. If rejected, revise based on their feedback and call submit_plan again.
+
+Do NOT proceed with implementation until your plan is approved.`);
     },
 
     // Intercept plannotator-last before the agent sees the command
@@ -437,7 +447,6 @@ Proceed with implementation, incorporating these notes where applicable.`;
           } else {
             return planDenyFeedback(result.feedback || "", "submit_plan", {
               planFilePath: sourceFilePath,
-              historyPath: !sourceFilePath ? result.historyPath : undefined,
             });
           }
         },

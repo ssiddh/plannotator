@@ -83,7 +83,6 @@ export interface ServerResult {
     approved: boolean;
     feedback?: string;
     savedPath?: string;
-    historyPath?: string;
     agentSwitch?: string;
     permissionMode?: string;
   }>;
@@ -141,7 +140,6 @@ export async function startPlannotatorServer(
     approved: boolean;
     feedback?: string;
     savedPath?: string;
-    historyPath?: string;
     agentSwitch?: string;
     permissionMode?: string;
   }) => void;
@@ -149,7 +147,6 @@ export async function startPlannotatorServer(
     approved: boolean;
     feedback?: string;
     savedPath?: string;
-    historyPath?: string;
     agentSwitch?: string;
     permissionMode?: string;
   }>((resolve) => {
@@ -397,7 +394,7 @@ export async function startPlannotatorServer(
 
             // Use permission mode from client request if provided, otherwise fall back to hook input
             const effectivePermissionMode = requestedPermissionMode || permissionMode;
-            resolveDecision({ approved: true, feedback, savedPath, historyPath: currentPlanPath, agentSwitch, permissionMode: effectivePermissionMode });
+            resolveDecision({ approved: true, feedback, savedPath, agentSwitch, permissionMode: effectivePermissionMode });
             return Response.json({ ok: true, savedPath });
           }
 
@@ -430,7 +427,7 @@ export async function startPlannotatorServer(
             }
 
             deleteDraft(draftKey);
-            resolveDecision({ approved: false, feedback, savedPath, historyPath: currentPlanPath });
+            resolveDecision({ approved: false, feedback, savedPath });
             return Response.json({ ok: true, savedPath });
           }
 
