@@ -19,6 +19,7 @@ import { DiffViewer } from './components/DiffViewer';
 import { ReviewPanel } from './components/ReviewPanel';
 import { FileTree } from './components/FileTree';
 import { DEMO_DIFF } from './demoData';
+import { exportReviewFeedback } from './utils/exportFeedback';
 import type { DiffOption, WorktreeInfo, GitContext } from '@plannotator/shared/types';
 import type { PRMetadata } from '@plannotator/shared/pr-provider';
 
@@ -78,78 +79,6 @@ function parseDiffToFiles(rawPatch: string): DiffFile[] {
 // Generate unique ID
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
-}
-
-// Export annotations as markdown feedback
-function exportReviewFeedback(annotations: CodeAnnotation[], files: DiffFile[], prMeta?: PRMetadata | null): string {
-  if (annotations.length === 0) {
-    return '# Code Review\n\nNo feedback provided.';
-  }
-
-  const grouped = new Map<string, CodeAnnotation[]>();
-  for (const ann of annotations) {
-    const existing = grouped.get(ann.filePath) || [];
-    existing.push(ann);
-    grouped.set(ann.filePath, existing);
-  }
-
-  let output = prMeta
-    ? `# PR Review: ${prMeta.owner}/${prMeta.repo}#${prMeta.number}\n\n` +
-      `**${prMeta.title}**\n` +
-      `Branch: \`${prMeta.headBranch}\` → \`${prMeta.baseBranch}\`\n` +
-      `${prMeta.url}\n\n`
-    : '# Code Review Feedback\n\n';
-
-  for (const [filePath, fileAnnotations] of grouped) {
-    output += `## ${filePath}\n\n`;
-
-    const sorted = [...fileAnnotations].sort((a, b) => {
-      const aScope = a.scope ?? 'line';
-      const bScope = b.scope ?? 'line';
-      if (aScope !== bScope) {
-        return aScope === 'file' ? -1 : 1;
-      }
-      return a.lineStart - b.lineStart;
-    });
-
-    for (let i = 0; i < sorted.length; i++) {
-      const ann = sorted[i];
-      const scope = ann.scope ?? 'line';
-
-      if (scope === 'file') {
-        output += `### File Comment\n`;
-
-        if (ann.text) {
-          output += `${ann.text}\n`;
-        }
-
-        if (ann.suggestedCode) {
-          output += `\n**Suggested code:**\n\`\`\`\n${ann.suggestedCode}\n\`\`\`\n`;
-        }
-
-        output += '\n';
-        continue;
-      }
-
-      const lineRange = ann.lineStart === ann.lineEnd
-        ? `Line ${ann.lineStart}`
-        : `Lines ${ann.lineStart}-${ann.lineEnd}`;
-
-      output += `### ${lineRange} (${ann.side})\n`;
-
-      if (ann.text) {
-        output += `${ann.text}\n`;
-      }
-
-      if (ann.suggestedCode) {
-        output += `\n**Suggested code:**\n\`\`\`\n${ann.suggestedCode}\n\`\`\`\n`;
-      }
-
-      output += '\n';
-    }
-  }
-
-  return output;
 }
 
 const ReviewApp: React.FC = () => {
@@ -522,7 +451,7 @@ const ReviewApp: React.FC = () => {
       return;
     }
     try {
-      const feedback = exportReviewFeedback(annotations, files, prMetadata);
+      const feedback = exportReviewFeedback(annotations, prMetadata);
       await navigator.clipboard.writeText(feedback);
       setCopyFeedback('Feedback copied!');
       setTimeout(() => setCopyFeedback(null), 2000);
@@ -535,12 +464,12 @@ const ReviewApp: React.FC = () => {
 
   const activeFile = files[activeFileIndex];
   const feedbackMarkdown = useMemo(() => {
-    let output = exportReviewFeedback(annotations, files, prMetadata);
+    let output = exportReviewFeedback(annotations, prMetadata);
     if (editorAnnotations.length > 0) {
       output += exportEditorAnnotations(editorAnnotations);
     }
     return output;
-  }, [annotations, files, prMetadata, editorAnnotations]);
+  }, [annotations, prMetadata, editorAnnotations]);
 
   const totalAnnotationCount = annotations.length + editorAnnotations.length;
 
