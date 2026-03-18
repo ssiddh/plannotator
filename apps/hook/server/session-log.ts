@@ -49,7 +49,7 @@ export interface RenderedMessage {
 
 /**
  * Derive the project slug from a working directory path.
- * Claude Code uses the absolute path with `/` replaced by `-`, leading `-` stripped.
+ * Claude Code uses the absolute path with `/` replaced by `-` (leading `-` kept).
  */
 export function projectSlugFromCwd(cwd: string): string {
   return cwd.replace(/\//g, "-");
