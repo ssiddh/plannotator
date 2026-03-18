@@ -59,10 +59,15 @@ export async function handleReviewCommand(
       return;
     }
 
-    const pr = await fetchPR(prRef);
-    rawPatch = pr.rawPatch;
-    gitRef = `PR #${prRef.number}`;
-    prMetadata = pr.metadata;
+    try {
+      const pr = await fetchPR(prRef);
+      rawPatch = pr.rawPatch;
+      gitRef = `PR #${prRef.number}`;
+      prMetadata = pr.metadata;
+    } catch (err) {
+      client.app.log({ level: "error", message: err instanceof Error ? err.message : "Failed to fetch PR" });
+      return;
+    }
   } else {
     client.app.log({ level: "info", message: "Opening code review UI..." });
 

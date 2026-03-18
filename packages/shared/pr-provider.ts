@@ -164,7 +164,7 @@ export async function fetchPRFileContent(
   // GitHub returns base64-encoded content with newlines
   const cleaned = base64Content.replace(/\n/g, "");
   try {
-    return atob(cleaned);
+    return Buffer.from(cleaned, "base64").toString("utf-8");
   } catch {
     return null;
   }

@@ -460,7 +460,7 @@ const ReviewApp: React.FC = () => {
       setCopyFeedback('Failed to copy');
       setTimeout(() => setCopyFeedback(null), 2000);
     }
-  }, [annotations, files]);
+  }, [annotations, prMetadata]);
 
   const activeFile = files[activeFileIndex];
   const feedbackMarkdown = useMemo(() => {

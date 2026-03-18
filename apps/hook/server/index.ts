@@ -162,10 +162,15 @@ if (args[0] === "sessions") {
     }
 
     console.error(`Fetching PR #${prRef.number} from ${prRef.owner}/${prRef.repo}...`);
-    const pr = await fetchPR(prRef);
-    rawPatch = pr.rawPatch;
-    gitRef = `PR #${prRef.number}`;
-    prMetadata = pr.metadata;
+    try {
+      const pr = await fetchPR(prRef);
+      rawPatch = pr.rawPatch;
+      gitRef = `PR #${prRef.number}`;
+      prMetadata = pr.metadata;
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : "Failed to fetch PR");
+      process.exit(1);
+    }
   } else {
     // --- Local Review Mode ---
     gitContext = await getGitContext();
