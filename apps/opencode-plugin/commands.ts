@@ -155,17 +155,22 @@ export async function handleAnnotateCommand(
   }
 }
 
+/**
+ * Handle /plannotator-last command.
+ * Called from command.execute.before — returns the feedback string
+ * so the caller can set it as output.parts for the agent to see.
+ */
 export async function handleAnnotateLastCommand(
   event: any,
   deps: CommandDeps
-) {
+): Promise<string | null> {
   const { client, htmlContent, getSharingEnabled, getShareBaseUrl } = deps;
 
   // @ts-ignore - Event properties contain sessionID
   const sessionId = event.properties?.sessionID;
   if (!sessionId) {
     client.app.log({ level: "error", message: "No active session." });
-    return;
+    return null;
   }
 
   // Fetch messages from session
@@ -193,7 +198,7 @@ export async function handleAnnotateLastCommand(
 
   if (!lastText) {
     client.app.log({ level: "error", message: "No assistant message found in session." });
-    return;
+    return null;
   }
 
   client.app.log({ level: "info", message: "Opening annotation UI for last message..." });
@@ -213,19 +218,5 @@ export async function handleAnnotateLastCommand(
   await Bun.sleep(1500);
   server.stop();
 
-  if (result.feedback) {
-    try {
-      await client.session.prompt({
-        path: { id: sessionId },
-        body: {
-          parts: [{
-            type: "text",
-            text: `# Message Annotations\n\n${result.feedback}\n\nPlease address the annotation feedback above.`,
-          }],
-        },
-      });
-    } catch {
-      // Session may not be available
-    }
-  }
+  return result.feedback || null;
 }

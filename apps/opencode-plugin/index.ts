@@ -269,7 +269,46 @@ Do NOT proceed with implementation until your plan is approved.
 `);
     },
 
-    // Listen for slash commands
+    // Intercept plannotator-last before the agent sees the command
+    "command.execute.before": async (input, output) => {
+      if (input.command !== "plannotator-last") return;
+
+      // Clear parts so the agent doesn't respond to the command body
+      output.parts = [];
+
+      const deps: CommandDeps = {
+        client: ctx.client,
+        htmlContent,
+        reviewHtmlContent,
+        getSharingEnabled,
+        getShareBaseUrl,
+      };
+
+      // Fetch last message, run annotation server, get feedback
+      const feedback = await handleAnnotateLastCommand(
+        { properties: { sessionID: input.sessionID } },
+        deps
+      );
+
+      // Send feedback as a new prompt — same pattern as review/annotate
+      if (feedback) {
+        try {
+          await ctx.client.session.prompt({
+            path: { id: input.sessionID },
+            body: {
+              parts: [{
+                type: "text",
+                text: `# Message Annotations\n\n${feedback}\n\nPlease address the annotation feedback above.`,
+              }],
+            },
+          });
+        } catch {
+          // Session may not be available
+        }
+      }
+    },
+
+    // Listen for slash commands (review + annotate)
     event: async ({ event }) => {
       const isCommandEvent =
         event.type === "command.executed" ||
@@ -292,8 +331,6 @@ Do NOT proceed with implementation until your plan is approved.
         return handleReviewCommand(event, deps);
       if (commandName === "plannotator-annotate")
         return handleAnnotateCommand(event, deps);
-      if (commandName === "plannotator-last")
-        return handleAnnotateLastCommand(event, deps);
     },
 
     tool: {
