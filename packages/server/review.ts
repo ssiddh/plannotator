@@ -15,11 +15,13 @@ import { getRepoInfo } from "./repo";
 import { handleImage, handleUpload, handleAgents, handleServerReady, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, type OpencodeClient } from "./shared-handlers";
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
+import { type PRMetadata, fetchPRFileContent } from "./pr";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
 export { openBrowser } from "./browser";
 export { type DiffType, type DiffOption, type GitContext, type WorktreeInfo } from "./git";
+export { type PRMetadata } from "./pr";
 export { handleServerReady as handleReviewServerReady } from "./shared-handlers";
 
 // --- Types ---
@@ -47,6 +49,8 @@ export interface ReviewServerOptions {
   onReady?: (url: string, isRemote: boolean, port: number) => void;
   /** OpenCode client for querying available agents (OpenCode only) */
   opencodeClient?: OpencodeClient;
+  /** PR metadata when reviewing a pull request (PR mode) */
+  prMetadata?: PRMetadata;
 }
 
 export interface ReviewServerResult {
@@ -83,8 +87,9 @@ const RETRY_DELAY_MS = 500;
 export async function startReviewServer(
   options: ReviewServerOptions
 ): Promise<ReviewServerResult> {
-  const { htmlContent, origin, gitContext, sharingEnabled = true, shareBaseUrl, onReady } = options;
+  const { htmlContent, origin, gitContext, sharingEnabled = true, shareBaseUrl, onReady, prMetadata } = options;
 
+  const isPRMode = !!prMetadata;
   const draftKey = contentHash(options.rawPatch);
   const editorAnnotations = createEditorAnnotationHandler();
 
@@ -98,7 +103,10 @@ export async function startReviewServer(
   const configuredPort = getServerPort();
 
   // Detect repo info (cached for this session)
-  const repoInfo = await getRepoInfo();
+  // In PR mode, derive from metadata instead of local git
+  const repoInfo = isPRMode
+    ? { display: `${prMetadata.owner}/${prMetadata.repo}`, branch: `PR #${prMetadata.number}` }
+    : await getRepoInfo();
 
   // Decision promise
   let resolveDecision: (result: {
@@ -133,17 +141,24 @@ export async function startReviewServer(
               rawPatch: currentPatch,
               gitRef: currentGitRef,
               origin,
-              diffType: currentDiffType,
-              gitContext,
+              diffType: isPRMode ? undefined : currentDiffType,
+              gitContext: isPRMode ? undefined : gitContext,
               sharingEnabled,
               shareBaseUrl,
               repoInfo,
+              ...(isPRMode && { prMetadata }),
               ...(currentError && { error: currentError }),
             });
           }
 
-          // API: Switch diff type
+          // API: Switch diff type (disabled in PR mode)
           if (url.pathname === "/api/diff/switch" && req.method === "POST") {
+            if (isPRMode) {
+              return Response.json(
+                { error: "Not available for PR reviews" },
+                { status: 400 },
+              );
+            }
             try {
               const body = (await req.json()) as { diffType: DiffType };
               let newDiffType = body.diffType;
@@ -195,6 +210,17 @@ export async function startReviewServer(
                 return Response.json({ error: "Invalid path" }, { status: 400 });
               }
             }
+
+            if (isPRMode) {
+              // Fetch file content from GitHub API using base/head SHAs
+              const prRef = { platform: prMetadata.platform, owner: prMetadata.owner, repo: prMetadata.repo, number: prMetadata.number } as const;
+              const [oldContent, newContent] = await Promise.all([
+                fetchPRFileContent(prRef, prMetadata.baseSha, oldPath || filePath),
+                fetchPRFileContent(prRef, prMetadata.headSha, filePath),
+              ]);
+              return Response.json({ oldContent, newContent });
+            }
+
             const defaultBranch = gitContext?.defaultBranch || "main";
             const defaultCwd = gitContext?.cwd;
             const result = await getFileContentsForDiff(
@@ -207,8 +233,14 @@ export async function startReviewServer(
             return Response.json(result);
           }
 
-          // API: Git add / reset (stage / unstage) a file
+          // API: Git add / reset (stage / unstage) a file (disabled in PR mode)
           if (url.pathname === "/api/git-add" && req.method === "POST") {
+            if (isPRMode) {
+              return Response.json(
+                { error: "Not available for PR reviews" },
+                { status: 400 },
+              );
+            }
             try {
               const body = (await req.json()) as { filePath: string; undo?: boolean };
               if (!body.filePath) {
