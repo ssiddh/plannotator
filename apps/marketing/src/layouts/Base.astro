@@ -42,7 +42,7 @@ import '../styles/global.css';
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&display=swap" rel="stylesheet" />
   </head>
   <body class="min-h-screen antialiased">
     <slot />
@@ -85,6 +85,120 @@ import '../styles/global.css';
         });
         pre.appendChild(btn);
       });
+    </script>
+    <script is:inline>
+      // Agent path selector (landing page)
+      (function() {
+        var videoMap = {
+          'claude-code': 'https://www.youtube.com/watch?v=a_AT7cEN_9I',
+          'opencode': 'https://youtu.be/_N7uo0EFI-U',
+          'pi': 'https://youtu.be/XqFun9XCXPw',
+          'codex': ''
+        };
+
+        function setAgent(agent) {
+          document.querySelectorAll('.agent-tab').forEach(function(tab) {
+            var isActive = tab.dataset.agent === agent;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          });
+          document.querySelectorAll('.agent-panel').forEach(function(panel) {
+            panel.classList.toggle('active', panel.dataset.forAgent === agent);
+          });
+          var ctaLink = document.getElementById('cta-video-link');
+          if (ctaLink) {
+            var ctaUrl = videoMap[agent];
+            if (ctaUrl) { ctaLink.href = ctaUrl; ctaLink.style.display = ''; }
+            else { ctaLink.style.display = 'none'; }
+          }
+          try { localStorage.setItem('plannotator-agent', agent); } catch(e) {}
+        }
+
+        document.querySelectorAll('.agent-tab').forEach(function(tab) {
+          tab.addEventListener('click', function() { setAgent(tab.dataset.agent); });
+        });
+
+        var saved = '';
+        try { saved = localStorage.getItem('plannotator-agent'); } catch(e) {}
+        setAgent(saved && videoMap.hasOwnProperty(saved) ? saved : 'claude-code');
+      })();
+    </script>
+    <script is:inline>
+      // Install block copy buttons (landing page)
+      document.querySelectorAll('.install-copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          var block = btn.closest('.install-block');
+          var code = block.querySelector('code');
+          var text = code ? code.textContent : '';
+          navigator.clipboard.writeText(text.trim()).then(function() {
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
+            setTimeout(function() {
+              btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+            }, 1500);
+          });
+        });
+      });
+    </script>
+    <script is:inline>
+      // How it works toggle (plan review / code review)
+      (function() {
+        var planSteps = [
+          'Work with your coding agent exactly as you do today. When it proposes a plan, Plannotator intercepts the approval step automatically.',
+          'Instead of squinting at terminal text, you get a proper review workspace. Annotate inline, mark what needs to change, then approve or deny with structured feedback. You own the specification.',
+          'Your annotations are sent directly to the agent as structured feedback. No copy-pasting, no retyping. The agent revises based on exactly what you said.'
+        ];
+        var codeSteps = [
+          'Your agent writes code. Run the review command and Plannotator opens a full diff viewer in your browser with every uncommitted change.',
+          'Browse the file tree, expand context, and leave line-level comments or code suggestions. Stage the files you want, send back the ones that need work.',
+          'Your feedback goes straight to the agent. It sees exactly which lines you commented on and what you want changed. No ambiguity.'
+        ];
+
+        document.querySelectorAll('.hiw-toggle-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var mode = btn.dataset.hiw;
+            document.querySelectorAll('.hiw-toggle-btn').forEach(function(b) {
+              b.classList.toggle('active', b.dataset.hiw === mode);
+              b.setAttribute('aria-selected', b.dataset.hiw === mode ? 'true' : 'false');
+            });
+
+            var planImg = document.getElementById('hiw-img-plan');
+            var codeImg = document.getElementById('hiw-img-code');
+            var barTitle = document.querySelector('.hiw-bar-title');
+            if (planImg && codeImg) {
+              planImg.classList.toggle('hidden', mode === 'code');
+              codeImg.classList.toggle('hidden', mode === 'plan');
+            }
+            if (barTitle) {
+              barTitle.innerHTML = mode === 'plan'
+                ? 'Plannotator &mdash; Plan Review'
+                : 'Plannotator &mdash; Code Review';
+            }
+
+            var steps = mode === 'plan' ? planSteps : codeSteps;
+            for (var i = 0; i < 3; i++) {
+              var el = document.getElementById('hiw-step-' + (i + 1));
+              if (el) el.textContent = steps[i];
+            }
+          });
+        });
+      })();
+    </script>
+    <script is:inline>
+      // Scroll reveal for landing sections
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('revealed');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal, .landing-reveal').forEach(function(el) {
+          observer.observe(el);
+        });
+      }
     </script>
   </body>
 </html>
