@@ -159,6 +159,7 @@ import '../styles/global.css';
         var output = document.getElementById('plan-demo-output');
         var ascii = document.getElementById('plan-demo-ascii');
         var denyBtn = document.getElementById('plan-demo-deny');
+        var glove = document.getElementById('plan-demo-glove');
         if (!demo || !terminal || !screen || !image || !typed || !caret || !output || !denyBtn) return;
 
         function scrollToBottom() {
@@ -198,6 +199,7 @@ import '../styles/global.css';
           output.innerHTML = '';
           caret.classList.remove('hidden');
           if (ascii) ascii.style.opacity = '1';
+          if (glove) glove.classList.remove('visible');
           image.classList.remove('plan-demo-visible');
           terminal.classList.remove('plan-demo-faded');
         }
@@ -205,6 +207,7 @@ import '../styles/global.css';
         function showImage() {
           terminal.classList.add('plan-demo-faded');
           image.classList.add('plan-demo-visible');
+          if (glove) delay(function() { glove.classList.add('visible'); }, 600);
         }
 
         function showTerminal() {
@@ -262,6 +265,7 @@ import '../styles/global.css';
 
         function runPhase2() {
           if (!active) return;
+          if (glove) glove.classList.remove('visible');
           showTerminal();
           typed.textContent = '';
           output.innerHTML = '';
@@ -318,6 +322,7 @@ import '../styles/global.css';
         var output = document.getElementById('code-demo-output');
         var ascii = document.getElementById('code-demo-ascii');
         var sendBtn = document.getElementById('code-demo-send');
+        var glove = document.getElementById('code-demo-glove');
         if (!demo || !terminal || !screen || !image || !typed || !caret || !output || !sendBtn) return;
 
         var active = false;
@@ -353,6 +358,7 @@ import '../styles/global.css';
           output.innerHTML = '';
           caret.classList.remove('hidden');
           if (ascii) ascii.style.opacity = '1';
+          if (glove) glove.classList.remove('visible');
           image.classList.remove('plan-demo-visible');
           terminal.classList.remove('plan-demo-faded');
         }
@@ -360,6 +366,7 @@ import '../styles/global.css';
         function showImage() {
           terminal.classList.add('plan-demo-faded');
           image.classList.add('plan-demo-visible');
+          if (glove) delay(function() { glove.classList.add('visible'); }, 600);
         }
 
         function showTerminal() {
@@ -398,6 +405,7 @@ import '../styles/global.css';
 
         function runPhase2() {
           if (!active) return;
+          if (glove) glove.classList.remove('visible');
           showTerminal();
           typed.textContent = '';
           output.innerHTML = '';
