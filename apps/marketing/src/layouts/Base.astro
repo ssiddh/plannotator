@@ -171,8 +171,8 @@ import '../styles/global.css';
             }
             if (barTitle) {
               barTitle.innerHTML = mode === 'plan'
-                ? 'Plannotator &mdash; Plan Review'
-                : 'Plannotator &mdash; Code Review';
+                ? 'Plannotator · Plan Review'
+                : 'Plannotator · Code Review';
             }
 
             var steps = mode === 'plan' ? planSteps : codeSteps;
@@ -182,6 +182,296 @@ import '../styles/global.css';
             }
           });
         });
+      })();
+    </script>
+    <script is:inline>
+      // Plan review terminal demo — starts on viewport entry
+      (function() {
+        var demo = document.getElementById('plan-demo');
+        var terminal = document.getElementById('plan-demo-terminal');
+        var screen = document.getElementById('plan-demo-screen');
+        var image = document.getElementById('plan-demo-image');
+        var typed = document.getElementById('plan-demo-typed');
+        var caret = document.getElementById('plan-demo-caret');
+        var output = document.getElementById('plan-demo-output');
+        var ascii = document.getElementById('plan-demo-ascii');
+        var denyBtn = document.getElementById('plan-demo-deny');
+        if (!demo || !terminal || !screen || !image || !typed || !caret || !output || !denyBtn) return;
+
+        function scrollToBottom() {
+          screen.scrollTop = screen.scrollHeight;
+        }
+
+        var active = false;
+        var timers = [];
+
+        function delay(fn, ms) {
+          var t = setTimeout(fn, ms);
+          timers.push(t);
+          return t;
+        }
+
+        function clearTimers() {
+          timers.forEach(clearTimeout);
+          timers = [];
+        }
+
+        function typeText(el, text, speed, cb) {
+          var i = 0;
+          function tick() {
+            if (!active) return;
+            if (i < text.length) {
+              el.textContent += text[i];
+              i++;
+              delay(tick, speed);
+            } else if (cb) { cb(); }
+          }
+          tick();
+        }
+
+        function resetDemo() {
+          clearTimers();
+          typed.textContent = '';
+          output.innerHTML = '';
+          caret.classList.remove('hidden');
+          if (ascii) ascii.style.opacity = '1';
+          image.classList.remove('plan-demo-visible');
+          terminal.classList.remove('plan-demo-faded');
+        }
+
+        function showImage() {
+          terminal.classList.add('plan-demo-faded');
+          image.classList.add('plan-demo-visible');
+        }
+
+        function showTerminal() {
+          image.classList.remove('plan-demo-visible');
+          terminal.classList.remove('plan-demo-faded');
+        }
+
+        function showOutput(text, cls) {
+          var line = document.createElement('div');
+          if (cls) line.className = cls;
+          line.textContent = text;
+          output.appendChild(line);
+          screen.scrollTop = screen.scrollHeight;
+        }
+
+        function runPhase1() {
+          if (!active) return;
+          resetDemo();
+          active = true;
+          delay(function() {
+            if (!active) return;
+            if (ascii) ascii.style.opacity = '0.4';
+            delay(function() {
+              if (!active) return;
+              typeText(typed, '/plan', 100, function() {
+                delay(function() {
+                  if (!active) return;
+                  caret.classList.add('hidden');
+                  delay(function() {
+                    if (!active) return;
+                    showOutput('... exploring codebase', 'plan-demo-step');
+                    delay(function() {
+                      if (!active) return;
+                      showOutput('... asking questions', 'plan-demo-step');
+                      delay(function() {
+                        if (!active) return;
+                        showOutput('... gathering context', 'plan-demo-step');
+                        delay(function() {
+                          if (!active) return;
+                          showOutput('... writing plan', 'plan-demo-step');
+                          delay(function() {
+                            if (!active) return;
+                            showOutput('submit_plan()', 'plan-demo-submit');
+                            delay(function() { if (active) showImage(); }, 900);
+                          }, 1000);
+                        }, 900);
+                      }, 800);
+                    }, 800);
+                  }, 600);
+                }, 700);
+              });
+            }, 400);
+          }, 1200);
+        }
+
+        function runPhase2() {
+          if (!active) return;
+          showTerminal();
+          typed.textContent = '';
+          output.innerHTML = '';
+          caret.classList.add('hidden');
+          if (ascii) ascii.style.opacity = '0.4';
+          typed.textContent = '...';
+          screen.scrollTop = screen.scrollHeight;
+          delay(function() {
+            if (!active) return;
+            showOutput('✗ Plan denied with feedback', 'text-destructive');
+            delay(function() {
+              if (!active) return;
+              showOutput('"Keep Postgres — Redis adds infra', 'text-primary');
+              delay(function() {
+                if (!active) return;
+                showOutput('we don\'t need yet."', 'text-primary');
+                delay(function() {
+                  if (!active) return;
+                  showOutput('Updating the plan...', 'text-success');
+                  delay(runPhase1, 3000);
+                }, 800);
+              }, 500);
+            }, 700);
+          }, 800);
+        }
+
+        denyBtn.addEventListener('click', runPhase2);
+
+        // Continuous observation — start/stop based on visibility
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting && !active) {
+              active = true;
+              delay(runPhase1, 600);
+            } else if (!entry.isIntersecting && active) {
+              active = false;
+              clearTimers();
+              resetDemo();
+            }
+          });
+        }, { threshold: 0.6 });
+        observer.observe(demo);
+      })();
+    </script>
+    <script is:inline>
+      // Code review terminal demo — starts on viewport entry
+      (function() {
+        var demo = document.getElementById('code-demo');
+        var terminal = document.getElementById('code-demo-terminal');
+        var screen = document.getElementById('code-demo-screen');
+        var image = document.getElementById('code-demo-image');
+        var typed = document.getElementById('code-demo-typed');
+        var caret = document.getElementById('code-demo-caret');
+        var output = document.getElementById('code-demo-output');
+        var ascii = document.getElementById('code-demo-ascii');
+        var sendBtn = document.getElementById('code-demo-send');
+        if (!demo || !terminal || !screen || !image || !typed || !caret || !output || !sendBtn) return;
+
+        var active = false;
+        var timers = [];
+
+        function delay(fn, ms) {
+          var t = setTimeout(fn, ms);
+          timers.push(t);
+          return t;
+        }
+
+        function clearTimers() {
+          timers.forEach(clearTimeout);
+          timers = [];
+        }
+
+        function typeText(el, text, speed, cb) {
+          var i = 0;
+          function tick() {
+            if (!active) return;
+            if (i < text.length) {
+              el.textContent += text[i];
+              i++;
+              delay(tick, speed);
+            } else if (cb) { cb(); }
+          }
+          tick();
+        }
+
+        function resetDemo() {
+          clearTimers();
+          typed.textContent = '';
+          output.innerHTML = '';
+          caret.classList.remove('hidden');
+          if (ascii) ascii.style.opacity = '1';
+          image.classList.remove('plan-demo-visible');
+          terminal.classList.remove('plan-demo-faded');
+        }
+
+        function showImage() {
+          terminal.classList.add('plan-demo-faded');
+          image.classList.add('plan-demo-visible');
+        }
+
+        function showTerminal() {
+          image.classList.remove('plan-demo-visible');
+          terminal.classList.remove('plan-demo-faded');
+        }
+
+        function addLine(text, cls) {
+          var line = document.createElement('div');
+          if (cls) line.className = cls;
+          line.textContent = text;
+          output.appendChild(line);
+          screen.scrollTop = screen.scrollHeight;
+        }
+
+        function runPhase1() {
+          if (!active) return;
+          resetDemo();
+          active = true;
+          delay(function() {
+            if (!active) return;
+            if (ascii) ascii.style.opacity = '0.4';
+            delay(function() {
+              if (!active) return;
+              typeText(typed, '/plannotator-review', 60, function() {
+                delay(function() {
+                  if (!active) return;
+                  caret.classList.add('hidden');
+                  addLine('Loading diff...', 'plan-demo-step');
+                  delay(function() { if (active) showImage(); }, 800);
+                }, 600);
+              });
+            }, 400);
+          }, 1200);
+        }
+
+        function runPhase2() {
+          if (!active) return;
+          showTerminal();
+          typed.textContent = '';
+          output.innerHTML = '';
+          caret.classList.add('hidden');
+          if (ascii) ascii.style.opacity = '0.4';
+          typed.textContent = '...';
+          screen.scrollTop = screen.scrollHeight;
+          delay(function() {
+            if (!active) return;
+            addLine('Feedback sent to agent', 'text-primary');
+            delay(function() {
+              if (!active) return;
+              addLine('2 comments, 1 suggestion', 'plan-demo-step');
+              delay(function() {
+                if (!active) return;
+                addLine('Addressing feedback...', 'text-success');
+                delay(runPhase1, 3000);
+              }, 800);
+            }, 600);
+          }, 800);
+        }
+
+        sendBtn.addEventListener('click', runPhase2);
+
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting && !active) {
+              active = true;
+              delay(runPhase1, 600);
+            } else if (!entry.isIntersecting && active) {
+              active = false;
+              clearTimers();
+              resetDemo();
+            }
+          });
+        }, { threshold: 0.6 });
+        observer.observe(demo);
       })();
     </script>
     <script is:inline>

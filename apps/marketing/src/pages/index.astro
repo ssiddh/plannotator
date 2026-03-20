@@ -56,19 +56,64 @@ import AnnoReplace from '../components/landing/AnnoReplace.astro';
               </li>
             </ul>
           </div>
-          <div class="browser-frame">
-            <div class="browser-frame-bar">
-              <div class="browser-frame-dot bg-destructive/50"></div>
-              <div class="browser-frame-dot bg-accent/50"></div>
-              <div class="browser-frame-dot bg-success/50"></div>
-              <span class="ml-2 text-[0.6875rem] text-muted-foreground">Plannotator</span>
+          <div class="plan-demo" id="plan-demo">
+            <!-- Terminal state -->
+            <div class="plan-demo-terminal" id="plan-demo-terminal">
+              <div class="browser-frame-bar">
+                <div class="browser-frame-dot bg-destructive/50"></div>
+                <div class="browser-frame-dot bg-accent/50"></div>
+                <div class="browser-frame-dot bg-success/50"></div>
+                <span class="ml-2 text-[0.6875rem] text-muted-foreground">Terminal</span>
+              </div>
+              <div class="plan-demo-screen" id="plan-demo-screen">
+                <div class="plan-demo-scroll">
+                  <pre class="plan-demo-ascii" id="plan-demo-ascii"
+>  ██████  ██████  ██████  ███████
+ ██      ██    ██ ██   ██ ██
+ ██      ██    ██ ██   ██ █████
+ ██      ██    ██ ██   ██ ██
+  ██████  ██████  ██████  ███████
+
+  █████   ██████  ███████ ███    ██ ████████
+ ██   ██ ██       ██      ████   ██    ██
+ ███████ ██   ███ █████   ██ ██  ██    ██
+ ██   ██ ██    ██ ██      ██  ████    ██
+ ██   ██  ██████  ███████ ██   ███    ██</pre>
+                  <div class="plan-demo-input-area">
+                    <span class="plan-demo-prompt">$</span>
+                    <span class="plan-demo-typed" id="plan-demo-typed"></span>
+                    <span class="plan-demo-caret" id="plan-demo-caret"></span>
+                  </div>
+                  <div class="plan-demo-output" id="plan-demo-output"></div>
+                </div>
+              </div>
             </div>
-            <img
-              src="/assets/plan-diff-preview.png"
-              alt="Plannotator plan diff view showing version comparison with inline annotations"
-              class="w-full block"
-              loading="lazy"
-            />
+
+            <!-- Image state -->
+            <div class="plan-demo-image plan-demo-hidden" id="plan-demo-image">
+              <div class="browser-frame-bar">
+                <div class="browser-frame-dot bg-destructive/50"></div>
+                <div class="browser-frame-dot bg-accent/50"></div>
+                <div class="browser-frame-dot bg-success/50"></div>
+                <span class="ml-2 text-[0.6875rem] text-muted-foreground">Plannotator</span>
+              </div>
+              <div class="relative">
+                <img
+                  src="/assets/plan-diff-preview.png"
+                  alt="Plannotator plan review with inline annotations"
+                  class="w-full block"
+                  loading="lazy"
+                />
+                <div class="plan-demo-deny-bar">
+                  <button class="plan-demo-deny-btn" id="plan-demo-deny">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Deny with feedback
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -107,53 +152,81 @@ import AnnoReplace from '../components/landing/AnnoReplace.astro';
               </li>
             </ul>
           </div>
-          <!-- Code review mock -->
-          <div class="browser-frame md:order-first">
-            <div class="browser-frame-bar">
-              <div class="browser-frame-dot bg-destructive/50"></div>
-              <div class="browser-frame-dot bg-accent/50"></div>
-              <div class="browser-frame-dot bg-success/50"></div>
-              <span class="ml-2 text-[0.6875rem] text-muted-foreground">Code Review</span>
+          <!-- Code review demo -->
+          <div class="plan-demo md:order-first" id="code-demo">
+            <!-- Terminal state -->
+            <div class="code-demo-terminal" id="code-demo-terminal">
+              <div class="browser-frame-bar">
+                <div class="browser-frame-dot bg-destructive/50"></div>
+                <div class="browser-frame-dot bg-accent/50"></div>
+                <div class="browser-frame-dot bg-success/50"></div>
+                <span class="ml-2 text-[0.6875rem] text-muted-foreground">Terminal</span>
+              </div>
+              <div class="plan-demo-screen" id="code-demo-screen">
+                <div class="plan-demo-scroll">
+                  <pre class="plan-demo-ascii" id="code-demo-ascii"
+>  ██████  ██████  ██████  ███████
+ ██      ██    ██ ██   ██ ██
+ ██      ██    ██ ██   ██ █████
+ ██      ██    ██ ██   ██ ██
+  ██████  ██████  ██████  ███████
+
+  █████   ██████  ███████ ███    ██ ████████
+ ██   ██ ██       ██      ████   ██    ██
+ ███████ ██   ███ █████   ██ ██  ██    ██
+ ██   ██ ██    ██ ██      ██  ████    ██
+ ██   ██  ██████  ███████ ██   ███    ██</pre>
+                  <div class="plan-demo-input-area">
+                    <span class="plan-demo-prompt">$</span>
+                    <span class="plan-demo-typed" id="code-demo-typed"></span>
+                    <span class="plan-demo-caret" id="code-demo-caret"></span>
+                  </div>
+                  <div class="plan-demo-output" id="code-demo-output"></div>
+                </div>
+              </div>
             </div>
-            <div class="bg-background/80 py-2">
-              <!-- File header -->
-              <div class="flex items-center gap-2 px-3 py-1.5 border-b border-border/30">
-                <svg class="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                <span class="font-mono text-xs text-foreground/80">src/auth/middleware.ts</span>
-                <span class="ml-auto text-[0.625rem] text-success">+12</span>
-                <span class="text-[0.625rem] text-destructive">-4</span>
+
+            <!-- Image state -->
+            <div class="plan-demo-image plan-demo-hidden" id="code-demo-image">
+              <div class="browser-frame-bar">
+                <div class="browser-frame-dot bg-destructive/50"></div>
+                <div class="browser-frame-dot bg-accent/50"></div>
+                <div class="browser-frame-dot bg-success/50"></div>
+                <span class="ml-2 text-[0.6875rem] text-muted-foreground">Plannotator · Code Review</span>
               </div>
-              <!-- Diff lines -->
-              <Fragment set:html={`
-              <div class="diff-line diff-context">&nbsp; 14 &nbsp;import { verifyToken } from "./jwt";</div>
-              <div class="diff-line diff-remove">&minus; 15 &nbsp;export function authMiddleware(req: Request) {</div>
-              <div class="diff-line diff-remove">&minus; 16 &nbsp;&nbsp;&nbsp;const token = req.headers.get("auth");</div>
-              <div class="diff-line diff-add">&plus; 15 &nbsp;export function createAuthMiddleware(opts: AuthOpts) {</div>
-              <div class="diff-line diff-add">&plus; 16 &nbsp;&nbsp;&nbsp;const { headerName = "authorization" } = opts;</div>
-              <div class="diff-line diff-add diff-annotation">&plus; 17 &nbsp;&nbsp;&nbsp;return async (req: Request) =&gt; {</div>
-              <div class="diff-line diff-context">&nbsp; 18 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;const payload = await verifyToken(token);</div>
-              <div class="diff-line diff-context">&nbsp; 19 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (!payload) throw new AuthError();</div>
-              <div class="diff-inline-annotation">
-                <span class="diff-inline-annotation-label">Comment</span>
-                <span class="diff-inline-annotation-text">Should this also validate token expiry?</span>
+              <div class="relative">
+                <img
+                  src="/assets/plan-diff-preview.png"
+                  alt="Plannotator code review with diff annotations"
+                  class="w-full block"
+                  loading="lazy"
+                />
+                <div class="plan-demo-deny-bar">
+                  <button class="code-demo-send-btn" id="code-demo-send">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                    </svg>
+                    Send feedback
+                  </button>
+                </div>
               </div>
-              `} />
             </div>
           </div>
         </div>
       </section>
 
       <!-- How it works -->
-      <section class="py-16 px-8 border-t border-border/30 bg-card/30 landing-reveal" id="how-it-works">
-        <div class="flex items-center justify-between mb-8">
-          <h2 class="font-display text-xl font-semibold tracking-tight">
-            How it works
-          </h2>
+      <section class="pt-10 pb-16 px-8 border-t border-border/30 bg-card/30 landing-reveal" id="how-it-works">
+        <h2 class="font-display text-xl font-semibold tracking-tight mb-2 text-center">
+          How it works<span class="text-muted-foreground/50">...</span> simple.
+        </h2>
+        <div class="flex justify-center mb-8">
           <div class="hiw-toggle" role="tablist" aria-label="Choose workflow">
             <button class="hiw-toggle-btn active" data-hiw="plan" role="tab" aria-selected="true">Plan Review</button>
-            <button class="hiw-toggle-btn" data-hiw="code" role="tab" aria-selected="false">Code Review</button>
+            <button class="hiw-toggle-btn" data-hiw="code" role="tab" aria-selected="false">
+              Code Review
+              <span class="hiw-notify-dot"></span>
+            </button>
           </div>
         </div>
 
@@ -163,7 +236,7 @@ import AnnoReplace from '../components/landing/AnnoReplace.astro';
             <div class="browser-frame-dot bg-destructive/50"></div>
             <div class="browser-frame-dot bg-accent/50"></div>
             <div class="browser-frame-dot bg-success/50"></div>
-            <span class="ml-2 text-[0.6875rem] text-muted-foreground hiw-bar-title">Plannotator &mdash; Plan Review</span>
+            <span class="ml-2 text-[0.6875rem] text-muted-foreground hiw-bar-title">Plannotator · Plan Review</span>
           </div>
           <div class="bg-background">
             <img
@@ -302,6 +375,9 @@ import AnnoReplace from '../components/landing/AnnoReplace.astro';
           <h2 class="font-display text-2xl font-semibold tracking-tight mb-6">
             Your next plan deserves more than a rubber stamp.
           </h2>
+          <p class="text-base text-muted-foreground mb-6">
+            Shape what gets built. Own what ships.
+          </p>
           <div class="install-block max-w-lg mx-auto mb-4">
             <code>curl -fsSL https://plannotator.ai/install.sh | bash</code>
             <button class="install-copy-btn" aria-label="Copy install command">

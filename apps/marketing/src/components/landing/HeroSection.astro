@@ -28,7 +28,7 @@ import AnnoReplace from './AnnoReplace.astro';
 
     <!-- Trust signal -->
     <p class="animate-fade-up animate-delay-1 mt-3 text-[11px] text-muted-foreground/50 tracking-wide">
-      Runs locally | end-to-end encrypted sharing | free forever
+      Runs locally | end-to-end encrypted sharing | free & open source
     </p>
 
     <!-- Agent selector + install area -->
@@ -39,9 +39,8 @@ import AnnoReplace from './AnnoReplace.astro';
           class="agent-btn active"
           data-agent="claude"
           data-command="curl -fsSL https://plannotator.ai/install.sh | bash"
-          data-detail="Then: /plugin marketplace add backnotprop/plannotator && /plugin install plannotator@plannotator"
           data-video="https://www.youtube.com/watch?v=a_AT7cEN_9I"
-          data-docs="/docs/guides/claude-code/"
+          data-agent="claude"
         >
           <img src="/assets/icon-claude.svg" alt="" class="w-4 h-4" />
           <span>Claude Code</span>
@@ -50,9 +49,8 @@ import AnnoReplace from './AnnoReplace.astro';
           class="agent-btn"
           data-agent="codex"
           data-command="curl -fsSL https://plannotator.ai/install.sh | bash"
-          data-detail="Review + annotate only — plan mode requires hooks (not yet supported)"
           data-video="https://www.youtube.com/watch?v=a_AT7cEN_9I"
-          data-docs="/docs/getting-started/installation/"
+          data-agent="codex"
         >
           <img src="/assets/icon-codex.png" alt="" class="w-4 h-4 rounded-sm" />
           <span>Codex</span>
@@ -61,9 +59,8 @@ import AnnoReplace from './AnnoReplace.astro';
           class="agent-btn"
           data-agent="opencode"
           data-command="curl -fsSL https://plannotator.ai/install.sh | bash"
-          data-detail='Then add to opencode.json: "plugin": ["@plannotator/opencode@latest"]'
           data-video="https://www.youtube.com/watch?v=a_AT7cEN_9I"
-          data-docs="/docs/guides/opencode/"
+          data-agent="opencode"
         >
           <img src="/assets/icon-opencode-dark.svg" alt="" class="w-4 h-4 icon-opencode" />
           <span>OpenCode</span>
@@ -72,9 +69,8 @@ import AnnoReplace from './AnnoReplace.astro';
           class="agent-btn"
           data-agent="pi"
           data-command="pi install npm:@plannotator/pi-extension"
-          data-detail="Or try without installing: pi -e npm:@plannotator/pi-extension"
           data-video="https://www.youtube.com/watch?v=XqFun9XCXPw"
-          data-docs="/docs/getting-started/installation/"
+          data-agent="pi"
         >
           <img src="/assets/icon-pi.svg" alt="" class="w-4 h-4 icon-pi" />
           <span>Pi</span>
@@ -82,7 +78,7 @@ import AnnoReplace from './AnnoReplace.astro';
       </div>
 
       <!-- Install command block -->
-      <div class="hero-install group px-5 py-3.5 text-sm max-w-lg" id="install-block">
+      <div class="hero-install group px-5 pr-12 py-3.5 text-sm max-w-xl" id="install-block">
         <span class="text-muted-foreground select-none mr-2">$</span>
         <span class="text-foreground select-all" id="install-command">curl -fsSL https://plannotator.ai/install.sh | bash</span>
         <button
@@ -100,10 +96,14 @@ import AnnoReplace from './AnnoReplace.astro';
         </button>
       </div>
 
-      <!-- Detail line (changes per agent) -->
-      <p class="text-[11px] text-muted-foreground/50 mt-2 h-4" id="install-detail">
-        Then: /plugin marketplace add backnotprop/plannotator && /plugin install plannotator@plannotator
-      </p>
+      <!-- Detail lines (change per agent) -->
+      <div class="mt-2 max-w-lg" id="install-detail-wrap">
+        <p class="text-[11px] text-muted-foreground/50" id="install-detail"></p>
+        <div class="hero-detail-steps hidden mt-1.5 space-y-1" id="install-steps">
+          <div class="hero-detail-step" id="install-step-1"></div>
+          <div class="hero-detail-step" id="install-step-2"></div>
+        </div>
+      </div>
 
       <!-- Secondary CTAs -->
       <div class="flex flex-wrap items-center gap-3 mt-5">
@@ -138,20 +138,85 @@ import AnnoReplace from './AnnoReplace.astro';
     var buttons = document.querySelectorAll('.agent-btn');
     var commandEl = document.getElementById('install-command');
     var detailEl = document.getElementById('install-detail');
+    var stepsEl = document.getElementById('install-steps');
+    var step1El = document.getElementById('install-step-1');
+    var step2El = document.getElementById('install-step-2');
     var videoLink = document.getElementById('watch-demo-link');
-    var docsLink = document.getElementById('docs-link');
     var copyBtn = document.getElementById('install-copy-btn');
 
-    buttons.forEach(function(btn) {
+    var copyIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    var checkIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
+
+    function makeStep(el, text) {
+      el.innerHTML = '';
+      var code = document.createElement('code');
+      code.textContent = text;
+      var btn = document.createElement('button');
+      btn.className = 'step-copy-btn';
+      btn.innerHTML = copyIcon;
+      btn.setAttribute('aria-label', 'Copy');
       btn.addEventListener('click', function() {
-        buttons.forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        commandEl.textContent = btn.dataset.command;
-        detailEl.textContent = btn.dataset.detail;
-        if (videoLink) videoLink.href = btn.dataset.video;
-        if (docsLink) docsLink.href = btn.dataset.docs;
+        navigator.clipboard.writeText(text).then(function() {
+          btn.innerHTML = checkIcon;
+          setTimeout(function() { btn.innerHTML = copyIcon; }, 1500);
+        });
       });
+      el.appendChild(code);
+      el.appendChild(btn);
+    }
+
+    // Agent configs: steps array means show detail steps, detail string means simple text
+    var agents = {
+      claude: {
+        steps: [
+          '/plugin marketplace add backnotprop/plannotator',
+          '/plugin install plannotator@plannotator'
+        ],
+        detail: 'Then run in Claude Code:'
+      },
+      codex: {
+        detail: 'Review + annotate only — plan mode requires hooks (not yet supported)'
+      },
+      opencode: {
+        steps: [
+          '"plugin": ["@plannotator/opencode@latest"]'
+        ],
+        detail: 'Then add to opencode.json:'
+      },
+      pi: {
+        detail: 'Or try without installing: pi -e npm:@plannotator/pi-extension'
+      }
+    };
+
+    function setAgent(btn) {
+      buttons.forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      commandEl.textContent = btn.dataset.command;
+      if (videoLink) videoLink.href = btn.dataset.video;
+
+      var config = agents[btn.dataset.agent] || {};
+      detailEl.textContent = config.detail || '';
+
+      if (config.steps) {
+        stepsEl.classList.remove('hidden');
+        makeStep(step1El, config.steps[0]);
+        if (config.steps[1]) {
+          step2El.classList.remove('hidden');
+          makeStep(step2El, config.steps[1]);
+        } else {
+          step2El.classList.add('hidden');
+        }
+      } else {
+        stepsEl.classList.add('hidden');
+      }
+    }
+
+    buttons.forEach(function(btn) {
+      btn.addEventListener('click', function() { setAgent(btn); });
     });
+
+    // Init default (first button)
+    setAgent(buttons[0]);
 
     if (copyBtn) {
       copyBtn.addEventListener('click', function() {
