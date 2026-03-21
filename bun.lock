@@ -56,7 +56,7 @@
     },
     "apps/opencode-plugin": {
       "name": "@plannotator/opencode",
-      "version": "0.14.3",
+      "version": "0.14.4",
       "dependencies": {
         "@opencode-ai/plugin": "^1.1.10",
       },
@@ -78,7 +78,7 @@
     },
     "apps/pi-extension": {
       "name": "@plannotator/pi-extension",
-      "version": "0.14.3",
+      "version": "0.14.4",
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": ">=0.53.0",
       },
@@ -134,6 +134,16 @@
         "typescript": "^5.0.0",
       },
     },
+    "packages/ai": {
+      "name": "@plannotator/ai",
+      "version": "0.0.1",
+      "peerDependencies": {
+        "@anthropic-ai/claude-agent-sdk": ">=0.1.0",
+      },
+      "optionalPeers": [
+        "@anthropic-ai/claude-agent-sdk",
+      ],
+    },
     "packages/editor": {
       "name": "@plannotator/editor",
       "version": "0.0.1",
@@ -159,7 +169,7 @@
     },
     "packages/server": {
       "name": "@plannotator/server",
-      "version": "0.14.3",
+      "version": "0.14.4",
       "dependencies": {
         "@plannotator/shared": "workspace:*",
       },
@@ -584,6 +594,8 @@
     "@pierre/theme": ["@pierre/theme@0.0.22", "", {}, "sha512-ePUIdQRNGjrveELTU7fY89Xa7YGHHEy5Po5jQy/18lm32eRn96+tnYJEtFooGdffrx55KBUtOXfvVy/7LDFFhA=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
+
+    "@plannotator/ai": ["@plannotator/ai@workspace:packages/ai"],
 
     "@plannotator/editor": ["@plannotator/editor@workspace:packages/editor"],
 
