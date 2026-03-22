@@ -51,7 +51,7 @@ import { registerSession, unregisterSession, listSessions } from "@plannotator/s
 import { openBrowser } from "@plannotator/server/browser";
 import { detectProjectName } from "@plannotator/server/project";
 import { planDenyFeedback } from "@plannotator/shared/feedback-templates";
-import { findSessionLogsForCwd, getLastRenderedMessage, type RenderedMessage } from "./session-log";
+import { findSessionLogsForCwd, resolveSessionLogByPpid, findSessionLogsByAncestorWalk, getLastRenderedMessage, type RenderedMessage } from "./session-log";
 import { findCodexRolloutByThreadId, getLastCodexMessage } from "./codex-session";
 import path from "path";
 
@@ -351,21 +351,43 @@ if (args[0] === "sessions") {
       }
     }
   } else {
-    // Claude Code path: find session logs by CWD
-    const candidates = findSessionLogsForCwd(projectRoot);
+    // Claude Code path: resolve session log
+    //
+    // Strategy (most precise → least precise):
+    // 1. PPID session metadata: ~/.claude/sessions/<ppid>.json gives us the
+    //    exact sessionId and original cwd. Deterministic, O(1), no scanning.
+    // 2. CWD slug match: existing behavior — works when the shell CWD hasn't
+    //    changed from the session's project directory.
+    // 3. Ancestor walk: walk up the directory tree trying parent slugs. Handles
+    //    the common case where the user `cd`'d deeper into a subdirectory.
 
     if (process.env.PLANNOTATOR_DEBUG) {
       console.error(`[DEBUG] Project root: ${projectRoot}`);
-      console.error(`[DEBUG] Candidates: ${candidates.join(", ")}`);
+      console.error(`[DEBUG] PPID: ${process.ppid}`);
     }
 
-    for (const logPath of candidates) {
+    /** Try each log path, return the first that yields a message. */
+    function tryLogCandidates(label: string, getPaths: () => string[]): void {
+      if (lastMessage) return;
+      const paths = getPaths();
       if (process.env.PLANNOTATOR_DEBUG) {
-        console.error(`[DEBUG] Trying: ${logPath}`);
+        console.error(`[DEBUG] ${label}: ${paths.length ? paths.join(", ") : "(none)"}`);
       }
-      lastMessage = getLastRenderedMessage(logPath);
-      if (lastMessage) break;
+      for (const logPath of paths) {
+        lastMessage = getLastRenderedMessage(logPath);
+        if (lastMessage) return;
+      }
     }
+
+    // 1. Try PPID-based session metadata (most reliable)
+    const ppidLog = resolveSessionLogByPpid();
+    tryLogCandidates("PPID session metadata", () => ppidLog ? [ppidLog] : []);
+
+    // 2. Fall back to CWD slug match
+    tryLogCandidates("CWD slug match", () => findSessionLogsForCwd(projectRoot));
+
+    // 3. Fall back to ancestor directory walk
+    tryLogCandidates("Ancestor walk", () => findSessionLogsByAncestorWalk(projectRoot));
   }
 
   if (!lastMessage) {
