@@ -69,9 +69,9 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     // Stay in AI mode so the history updates
   };
 
-  const handleAskAICancel = () => {
+  const handleAskAIClose = () => {
     setAskAIMode(false);
-    // Don't call onCancel — just go back to annotation mode, not close the toolbar
+    onCancel(); // close the whole toolbar
   };
 
   return (
@@ -91,10 +91,11 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           lineStart={toolbarState.range.start}
           lineEnd={toolbarState.range.end}
           onSubmit={handleAskAISubmit}
-          onCancel={handleAskAICancel}
+          onCancel={handleAskAIClose}
           isLoading={isAILoading}
           aiHistory={aiHistoryMessages}
           onViewResponse={onViewAIResponse}
+          onSwitchToComment={() => setAskAIMode(false)}
         />
       ) : (
         <div className="w-80">

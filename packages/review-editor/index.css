@@ -609,9 +609,9 @@ diffs-container {
 
 @keyframes ai-file-flash {
   0% { background: transparent; }
-  10% { background: oklch(from var(--primary) l c h / 0.15); }
+  10% { background: var(--muted); }
   30% { background: transparent; }
-  45% { background: oklch(from var(--primary) l c h / 0.12); }
+  45% { background: var(--muted); }
   65% { background: transparent; }
   100% { background: transparent; }
 }
