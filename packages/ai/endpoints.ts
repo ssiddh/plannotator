@@ -32,6 +32,8 @@ export interface CreateSessionRequest {
   maxTurns?: number;
   /** Max budget in USD. */
   maxBudgetUsd?: number;
+  /** Reasoning effort (Codex only). */
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
 export interface QueryRequest {
@@ -79,11 +81,19 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
   return {
     "/api/ai/capabilities": async (_req: Request) => {
       const defaultEntry = registry.getDefault();
+      const providerDetails = registry.list().map(id => {
+        const p = registry.get(id)!;
+        return {
+          id,
+          name: p.name,
+          capabilities: p.capabilities,
+          models: p.models ?? [],
+        };
+      });
       return Response.json({
         available: !!defaultEntry,
-        providers: registry.list(),
+        providers: providerDetails,
         defaultProvider: defaultEntry?.id ?? null,
-        capabilities: defaultEntry?.provider.capabilities ?? null,
       });
     },
 
@@ -93,7 +103,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       const body = (await req.json()) as CreateSessionRequest;
-      const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
+      const { context, providerId, model, maxTurns, maxBudgetUsd, reasoningEffort } = body;
 
       if (!context?.mode) {
         return Response.json(
@@ -120,6 +130,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
           model,
           maxTurns,
           maxBudgetUsd,
+          reasoningEffort,
         };
 
         // Fork if parent session is provided, otherwise create fresh

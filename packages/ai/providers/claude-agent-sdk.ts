@@ -67,6 +67,11 @@ export class ClaudeAgentSDKProvider implements AIProvider {
     streaming: true,
     tools: true,
   };
+  readonly models = [
+    { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', default: true },
+    { id: 'claude-opus-4-6', label: 'Opus 4.6' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
+  ] as const;
 
   private config: ClaudeAgentSDKConfig;
 

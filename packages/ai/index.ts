@@ -72,6 +72,7 @@ export type {
   ParentSession,
   CreateSessionOptions,
   ClaudeAgentSDKConfig,
+  CodexSDKConfig,
 } from "./types.ts";
 
 // Provider registry

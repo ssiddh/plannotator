@@ -4,14 +4,7 @@ import type { DiffOption, WorktreeInfo } from '@plannotator/shared/types';
 import { buildFileTree, getAncestorPaths, getAllFolderPaths } from '../utils/buildFileTree';
 import { FileTreeNodeItem } from './FileTreeNode';
 import { getReviewSearchSideLabel, type ReviewSearchFileGroup, type ReviewSearchMatch } from '../utils/reviewSearch';
-
-interface DiffFile {
-  path: string;
-  oldPath?: string;
-  patch: string;
-  additions: number;
-  deletions: number;
-}
+import type { DiffFile } from '../types';
 
 interface FileTreeProps {
   files: DiffFile[];

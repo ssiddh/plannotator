@@ -54,6 +54,7 @@ plannotator/
 │   │   ├── utils/                # parser.ts, sharing.ts, storage.ts, planSave.ts, agentSwitch.ts, planDiffEngine.ts
 │   │   ├── hooks/                # useAnnotationHighlighter.ts, useSharing.ts, usePlanDiff.ts, useSidebar.ts, useLinkedDoc.ts, useAnnotationDraft.ts, useCodeAnnotationDraft.ts
 │   │   └── types.ts
+│   ├── ai/                       # Provider-agnostic AI backbone (providers, sessions, endpoints)
 │   ├── shared/                   # Shared types, utilities, and cross-package logic
 │   ├── editor/                   # Plan review App.tsx
 │   └── review-editor/            # Code review UI
@@ -186,6 +187,12 @@ Send Annotations → feedback sent to agent session
 | `/api/draft`          | GET/POST/DELETE | Auto-save annotation drafts to survive server crashes |
 | `/api/editor-annotations` | GET | List editor annotations (VS Code only) |
 | `/api/editor-annotation` | POST/DELETE | Add or remove an editor annotation (VS Code only) |
+| `/api/ai/capabilities` | GET | Check if AI features are available |
+| `/api/ai/session` | POST | Create or fork an AI session |
+| `/api/ai/query` | POST | Send a message and stream the response (SSE) |
+| `/api/ai/abort` | POST | Abort the current query |
+| `/api/ai/permission` | POST | Respond to a permission request |
+| `/api/ai/sessions` | GET | List active sessions |
 
 ### Annotate Server (`packages/server/annotate.ts`)
 
@@ -384,10 +391,19 @@ bun run package:vscode   # Package .vsix for marketplace
 bun run build            # Build hook + opencode (main targets)
 ```
 
-**Important:** The OpenCode plugin copies pre-built HTML from `apps/hook/dist/` and `apps/review/dist/`. When making UI changes (in `packages/ui/`, `packages/editor/`, or `packages/review-editor/`), you must rebuild the hook/review first:
+**Important: Build order matters.** The hook build (`build:hook`) copies pre-built HTML from `apps/review/dist/`. If you change UI code in `packages/ui/`, `packages/editor/`, or `packages/review-editor/`, you **must** rebuild the review app first, then the hook:
 
 ```bash
-bun run build:hook && bun run build:opencode   # For UI changes
+bun run --cwd apps/review build && bun run build:hook   # For review UI changes
+bun run build:hook                                       # For plan UI changes only
+bun run build:hook && bun run build:opencode             # For OpenCode plugin
+```
+
+Running only `build:hook` after review-editor changes will copy stale HTML files. When testing locally with a compiled binary, the full sequence is:
+
+```bash
+bun run --cwd apps/review build && bun run build:hook && \
+  bun build apps/hook/server/index.ts --compile --outfile ~/.local/bin/plannotator
 ```
 
 Running only `build:opencode` will copy stale HTML files.

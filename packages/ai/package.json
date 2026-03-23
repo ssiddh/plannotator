@@ -10,13 +10,18 @@
     "./provider": "./provider.ts",
     "./session-manager": "./session-manager.ts",
     "./endpoints": "./endpoints.ts",
-    "./providers/claude-agent-sdk": "./providers/claude-agent-sdk.ts"
+    "./providers/claude-agent-sdk": "./providers/claude-agent-sdk.ts",
+    "./providers/codex-sdk": "./providers/codex-sdk.ts"
   },
   "peerDependencies": {
-    "@anthropic-ai/claude-agent-sdk": ">=0.1.0"
+    "@anthropic-ai/claude-agent-sdk": ">=0.1.0",
+    "@openai/codex-sdk": ">=0.1.0"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    },
+    "@openai/codex-sdk": {
       "optional": true
     }
   }

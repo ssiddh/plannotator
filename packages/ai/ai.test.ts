@@ -394,8 +394,10 @@ describe("AI endpoints", () => {
     const data = await res.json();
     expect(data.available).toBe(true);
     expect(data.defaultProvider).toBe("mock");
-    expect(data.providers).toEqual(["mock"]);
-    expect(data.capabilities.fork).toBe(true);
+    expect(data.providers.length).toBe(1);
+    expect(data.providers[0].id).toBe("mock");
+    expect(data.providers[0].name).toBe("mock");
+    expect(data.providers[0].capabilities.fork).toBe(true);
   });
 
   test("capabilities lists multiple providers", async () => {
@@ -408,8 +410,9 @@ describe("AI endpoints", () => {
     );
     const data = await res.json();
     expect(data.providers.length).toBe(2);
-    expect(data.providers).toContain("claude-1");
-    expect(data.providers).toContain("oc-1");
+    const ids = data.providers.map((p: { id: string }) => p.id);
+    expect(ids).toContain("claude-1");
+    expect(ids).toContain("oc-1");
   });
 
   test("capabilities returns instance ID not type name for defaultProvider", async () => {
@@ -614,5 +617,290 @@ describe("AI endpoints", () => {
     );
     const sessions = (await listRes.json()) as Array<{ mode: string }>;
     expect(sessions.length).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Codex SDK event mapping
+// ---------------------------------------------------------------------------
+
+import { mapCodexEvent, mapCodexItem } from "./providers/codex-sdk.ts";
+
+describe("mapCodexEvent", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("thread.started returns empty", () => {
+    const result = mapCodexEvent(
+      { type: "thread.started", thread_id: "t-123" },
+      offsets(),
+    );
+    expect(result).toEqual([]);
+  });
+
+  test("turn.started and turn.completed return empty", () => {
+    expect(mapCodexEvent({ type: "turn.started" }, offsets())).toEqual([]);
+    expect(mapCodexEvent({ type: "turn.completed", usage: {} }, offsets())).toEqual([]);
+  });
+
+  test("turn.failed returns error", () => {
+    const result = mapCodexEvent(
+      { type: "turn.failed", error: { message: "Out of tokens" } },
+      offsets(),
+    );
+    expect(result).toEqual([{
+      type: "error",
+      error: "Out of tokens",
+      code: "turn_failed",
+    }]);
+  });
+
+  test("error event returns error", () => {
+    const result = mapCodexEvent(
+      { type: "error", message: "Connection lost" },
+      offsets(),
+    );
+    expect(result).toEqual([{
+      type: "error",
+      error: "Connection lost",
+      code: "codex_error",
+    }]);
+  });
+
+  test("unknown event type passes through", () => {
+    const result = mapCodexEvent(
+      { type: "some.future.event", data: 42 },
+      offsets(),
+    );
+    expect(result.length).toBe(1);
+    expect(result[0].type).toBe("unknown");
+  });
+});
+
+describe("mapCodexItem — agent_message", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("item.started initializes offset tracker, returns empty", () => {
+    const o = offsets();
+    const result = mapCodexItem(
+      { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } },
+      o,
+    );
+    expect(result).toEqual([]);
+    expect(o.get("msg-1")).toBe(0);
+  });
+
+  test("item.updated emits text_delta from cumulative text", () => {
+    const o = offsets();
+    o.set("msg-1", 0);
+
+    const r1 = mapCodexItem(
+      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello" } },
+      o,
+    );
+    expect(r1).toEqual([{ type: "text_delta", delta: "Hello" }]);
+    expect(o.get("msg-1")).toBe(5);
+
+    const r2 = mapCodexItem(
+      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello world" } },
+      o,
+    );
+    expect(r2).toEqual([{ type: "text_delta", delta: " world" }]);
+    expect(o.get("msg-1")).toBe(11);
+  });
+
+  test("item.updated with no new text returns empty", () => {
+    const o = offsets();
+    o.set("msg-1", 5);
+
+    const result = mapCodexItem(
+      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello" } },
+      o,
+    );
+    expect(result).toEqual([]);
+  });
+
+  test("item.completed emits full text and cleans up offset", () => {
+    const o = offsets();
+    o.set("msg-1", 5);
+
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: "Hello world" } },
+      o,
+    );
+    expect(result).toEqual([{ type: "text", text: "Hello world" }]);
+    expect(o.has("msg-1")).toBe(false);
+  });
+});
+
+describe("mapCodexItem — command_execution", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("item.started emits tool_use", () => {
+    const result = mapCodexItem(
+      { type: "item.started", item: { id: "cmd-1", type: "command_execution", command: "ls -la", status: "in_progress" } },
+      offsets(),
+    );
+    expect(result).toEqual([{
+      type: "tool_use",
+      toolName: "Bash",
+      toolInput: { command: "ls -la" },
+      toolUseId: "cmd-1",
+    }]);
+  });
+
+  test("item.completed emits tool_result with exit code", () => {
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "cmd-1", type: "command_execution", command: "ls", aggregated_output: "file.txt\n", exit_code: 0, status: "completed" } },
+      offsets(),
+    );
+    expect(result.length).toBe(1);
+    expect(result[0].type).toBe("tool_result");
+    if (result[0].type === "tool_result") {
+      expect(result[0].result).toContain("file.txt");
+      expect(result[0].result).toContain("[exit code: 0]");
+    }
+  });
+});
+
+describe("mapCodexItem — file_change", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("emits tool_use with changes", () => {
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "fc-1", type: "file_change", changes: [{ path: "src/foo.ts", kind: "update" }], status: "completed" } },
+      offsets(),
+    );
+    expect(result.length).toBe(1);
+    expect(result[0].type).toBe("tool_use");
+    if (result[0].type === "tool_use") {
+      expect(result[0].toolName).toBe("FileChange");
+    }
+  });
+});
+
+describe("mapCodexItem — mcp_tool_call", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("item.started emits tool_use with server/tool name", () => {
+    const result = mapCodexItem(
+      { type: "item.started", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: { q: "test" }, status: "in_progress" } },
+      offsets(),
+    );
+    expect(result).toEqual([{
+      type: "tool_use",
+      toolName: "github/search",
+      toolInput: { q: "test" },
+      toolUseId: "mcp-1",
+    }]);
+  });
+
+  test("item.completed with result emits tool_result", () => {
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: {}, result: "found 3 items", status: "completed" } },
+      offsets(),
+    );
+    expect(result.some(m => m.type === "tool_result")).toBe(true);
+  });
+
+  test("item.completed with error emits error", () => {
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: {}, error: { message: "rate limited" }, status: "completed" } },
+      offsets(),
+    );
+    expect(result.some(m => m.type === "error")).toBe(true);
+  });
+});
+
+describe("mapCodexItem — error and passthrough types", () => {
+  function offsets() {
+    return new Map<string, number>();
+  }
+
+  test("error item maps to error message", () => {
+    const result = mapCodexItem(
+      { type: "item.completed", item: { id: "e-1", type: "error", message: "Something broke" } },
+      offsets(),
+    );
+    expect(result).toEqual([{ type: "error", error: "Something broke" }]);
+  });
+
+  test("reasoning, web_search, todo_list pass through as unknown", () => {
+    for (const itemType of ["reasoning", "web_search", "todo_list"]) {
+      const result = mapCodexItem(
+        { type: "item.completed", item: { id: "x-1", type: itemType, text: "thinking..." } },
+        offsets(),
+      );
+      expect(result[0].type).toBe("unknown");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-provider capabilities
+// ---------------------------------------------------------------------------
+
+describe("Multi-provider endpoints", () => {
+  test("capabilities lists both providers with correct capabilities", async () => {
+    const reg = new ProviderRegistry();
+    const sm = new SessionManager();
+    const endpoints = createAIEndpoints({ registry: reg, sessionManager: sm });
+
+    // Claude-like: full capabilities
+    const claude = mockProvider("claude-agent-sdk");
+    reg.register(claude, "claude");
+
+    // Codex-like: no fork
+    const codex: AIProvider = {
+      ...mockProvider("codex-sdk"),
+      capabilities: { fork: false, resume: true, streaming: true, tools: true },
+    };
+    reg.register(codex, "codex");
+
+    const res = await endpoints["/api/ai/capabilities"](
+      new Request("http://localhost/api/ai/capabilities")
+    );
+    const data = await res.json();
+
+    expect(data.available).toBe(true);
+    expect(data.providers.length).toBe(2);
+    const ids = data.providers.map((p: { id: string }) => p.id);
+    expect(ids).toContain("claude");
+    expect(ids).toContain("codex");
+    // Default is first registered
+    expect(data.defaultProvider).toBe("claude");
+  });
+
+  test("session creation with specific provider ID routes correctly", async () => {
+    const reg = new ProviderRegistry();
+    const sm = new SessionManager();
+    const endpoints = createAIEndpoints({ registry: reg, sessionManager: sm });
+
+    reg.register(mockProvider("claude-agent-sdk"), "claude");
+    reg.register(mockProvider("codex-sdk"), "codex");
+
+    // Create session with codex provider
+    const res = await endpoints["/api/ai/session"](
+      new Request("http://localhost/api/ai/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: { mode: "code-review", review: { patch: "+x" } },
+          providerId: "codex",
+        }),
+      })
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { sessionId: string };
+    expect(data.sessionId).toBeDefined();
   });
 });

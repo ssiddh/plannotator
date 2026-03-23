@@ -98,10 +98,10 @@ export async function startReviewServer(
   const aiRegistry = new ProviderRegistry();
   const aiSessionManager = new SessionManager();
   let aiEndpoints: AIEndpoints | null = null;
+
+  // Try Claude Agent SDK
   try {
-    // Side-effect import registers the factory
     await import("@plannotator/ai/providers/claude-agent-sdk");
-    // Resolve claude binary path — required for compiled binaries
     const claudePath = Bun.which("claude");
     const provider = await createProvider({
       type: "claude-agent-sdk",
@@ -109,9 +109,27 @@ export async function startReviewServer(
       ...(claudePath && { claudeExecutablePath: claudePath }),
     });
     aiRegistry.register(provider);
-    aiEndpoints = createAIEndpoints({ registry: aiRegistry, sessionManager: aiSessionManager });
   } catch {
-    // SDK not available — AI features won't be offered
+    // Claude SDK not available
+  }
+
+  // Try Codex SDK
+  try {
+    await import("@plannotator/ai/providers/codex-sdk");
+    const codexPath = Bun.which("codex");
+    const provider = await createProvider({
+      type: "codex-sdk",
+      cwd: process.cwd(),
+      ...(codexPath && { codexExecutablePath: codexPath }),
+    });
+    aiRegistry.register(provider);
+  } catch {
+    // Codex SDK not available
+  }
+
+  // Create endpoints if any provider registered
+  if (aiRegistry.size > 0) {
+    aiEndpoints = createAIEndpoints({ registry: aiRegistry, sessionManager: aiSessionManager });
   }
 
   // Mutable state for diff switching

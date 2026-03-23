@@ -223,6 +223,11 @@ export interface CreateSessionOptions {
    * Maximum budget in USD for this session.
    */
   maxBudgetUsd?: number;
+  /**
+   * Reasoning effort level (Codex only).
+   * Controls how much thinking the model does before responding.
+   */
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
 /**
@@ -242,6 +247,9 @@ export interface AIProvider {
 
   /** What this provider can do. */
   readonly capabilities: AIProviderCapabilities;
+
+  /** Available models for this provider. */
+  readonly models?: ReadonlyArray<{ id: string; label: string; default?: boolean }>;
 
   /**
    * Create a fresh session (no parent history).
@@ -318,4 +326,19 @@ export interface ClaudeAgentSDKConfig extends AIProviderConfig {
    * inherits what they've already approved.
    */
   settingSources?: string[];
+}
+
+export interface CodexSDKConfig extends AIProviderConfig {
+  type: "codex-sdk";
+  /**
+   * Sandbox mode controls what the Codex agent can do.
+   * Defaults to "read-only" for safety in inline chat.
+   */
+  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
+  /**
+   * Explicit path to the codex CLI binary.
+   * Required when running inside a compiled binary where PATH resolution
+   * doesn't work the same way (e.g., bun build --compile).
+   */
+  codexExecutablePath?: string;
 }
