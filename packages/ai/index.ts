@@ -73,6 +73,7 @@ export type {
   CreateSessionOptions,
   ClaudeAgentSDKConfig,
   CodexSDKConfig,
+  PiSDKConfig,
 } from "./types.ts";
 
 // Provider registry
@@ -83,7 +84,10 @@ export {
 } from "./provider.ts";
 
 // Context builders
-export { buildSystemPrompt, buildForkPreamble } from "./context.ts";
+export { buildSystemPrompt, buildForkPreamble, buildEffectivePrompt } from "./context.ts";
+
+// Base session
+export { BaseSession } from "./base-session.ts";
 
 // Session manager
 export { SessionManager } from "./session-manager.ts";

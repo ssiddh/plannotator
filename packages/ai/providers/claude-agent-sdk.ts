@@ -11,7 +11,8 @@
  * to keep inline chat safe and cost-bounded.
  */
 
-import { buildSystemPrompt, buildForkPreamble } from "../context.ts";
+import { buildSystemPrompt, buildForkPreamble, buildEffectivePrompt } from "../context.ts";
+import { BaseSession } from "../base-session.ts";
 import type {
   AIProvider,
   AIProviderCapabilities,
@@ -170,54 +171,32 @@ interface SessionConfig {
   settingSources?: string[];
 }
 
-class ClaudeAgentSDKSession implements AISession {
-  readonly parentSessionId: string | null;
-  onIdResolved?: (oldId: string, newId: string) => void;
-
+class ClaudeAgentSDKSession extends BaseSession {
   private config: SessionConfig;
-  private _isActive = false;
-  private _placeholderId: string;
-  private _resolvedId: string | null = null;
-  private _currentAbort: AbortController | null = null;
-  private _firstQuerySent = false;
-  /** Monotonic counter — each query() call gets a unique generation. */
-  private _queryGen = 0;
   /** Active Query object — needed to send control responses (permission decisions) */
   private _activeQuery: { streamInput: (iter: AsyncIterable<unknown>) => Promise<void> } | null = null;
 
   constructor(config: SessionConfig) {
+    super({
+      parentSessionId: config.parentSessionId,
+      initialId: config.resumeSessionId,
+    });
     this.config = config;
-    this.parentSessionId = config.parentSessionId;
-    this._placeholderId = config.resumeSessionId ?? crypto.randomUUID();
-  }
-
-  get id(): string {
-    return this._resolvedId ?? this._placeholderId;
-  }
-
-  get isActive(): boolean {
-    return this._isActive;
   }
 
   async *query(prompt: string): AsyncIterable<AIMessage> {
-    // Reject if a query is already in-flight — let the caller decide to queue or abort
-    if (this._isActive) {
-      yield {
-        type: "error",
-        error: "A query is already in progress. Abort the current query before sending a new one.",
-        code: "session_busy",
-      };
-      return;
-    }
-
-    const gen = ++this._queryGen;
-    this._isActive = true;
-    this._currentAbort = new AbortController();
+    const started = this.startQuery();
+    if (!started) { yield BaseSession.BUSY_ERROR; return; }
+    const { gen } = started;
 
     try {
       const queryFn = await getSDKQuery();
 
-      const queryPrompt = this.buildQueryPrompt(prompt);
+      const queryPrompt = buildEffectivePrompt(
+        prompt,
+        this.config.forkPreamble ?? null,
+        this._firstQuerySent,
+      );
       const options = this.buildQueryOptions();
 
       const stream = queryFn({ prompt: queryPrompt, options });
@@ -235,9 +214,7 @@ class ClaudeAgentSDKSession implements AISession {
           typeof message.session_id === "string" &&
           message.session_id
         ) {
-          const oldId = this._placeholderId;
-          this._resolvedId = message.session_id;
-          this.onIdResolved?.(oldId, this._resolvedId);
+          this.resolveId(message.session_id);
         }
 
         for (const msg of mapped) {
@@ -251,23 +228,14 @@ class ClaudeAgentSDKSession implements AISession {
         code: "provider_error",
       };
     } finally {
-      // Only clear state if this is still the active query generation.
-      // Prevents a stale finally block from clobbering a newer query.
-      if (this._queryGen === gen) {
-        this._isActive = false;
-        this._currentAbort = null;
-        this._activeQuery = null;
-      }
+      this.endQuery(gen);
+      this._activeQuery = null;
     }
   }
 
   abort(): void {
-    if (this._currentAbort) {
-      this._currentAbort.abort();
-      this._isActive = false;
-      this._currentAbort = null;
-      this._activeQuery = null;
-    }
+    this._activeQuery = null;
+    super.abort();
   }
 
   respondToPermission(requestId: string, allow: boolean, message?: string): void {
@@ -285,13 +253,6 @@ class ClaudeAgentSDKSession implements AISession {
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
-
-  private buildQueryPrompt(userPrompt: string): string {
-    if (this.config.forkPreamble && !this._firstQuerySent) {
-      return `${this.config.forkPreamble}\n\n---\n\nUser question: ${userPrompt}`;
-    }
-    return userPrompt;
-  }
 
   private buildQueryOptions(): ClaudeSDKQueryOptions {
     const opts: ClaudeSDKQueryOptions = {

@@ -10,7 +10,8 @@
  * Sessions default to read-only sandbox mode for safety in inline chat.
  */
 
-import { buildSystemPrompt } from "../context.ts";
+import { buildSystemPrompt, buildEffectivePrompt } from "../context.ts";
+import { BaseSession } from "../base-session.ts";
 import type {
   AIProvider,
   AIProviderCapabilities,
@@ -126,17 +127,8 @@ interface SessionConfig {
   reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
-class CodexSDKSession implements AISession {
-  readonly parentSessionId: string | null;
-  onIdResolved?: (oldId: string, newId: string) => void;
-
+class CodexSDKSession extends BaseSession {
   private config: SessionConfig;
-  private _isActive = false;
-  private _placeholderId: string;
-  private _resolvedId: string | null = null;
-  private _currentAbort: AbortController | null = null;
-  private _firstQuerySent = false;
-  private _queryGen = 0;
   // biome-ignore lint/suspicious/noExplicitAny: SDK types not available at compile time
   private _codexInstance: any = null;
   // biome-ignore lint/suspicious/noExplicitAny: SDK types not available at compile time
@@ -145,36 +137,22 @@ class CodexSDKSession implements AISession {
   private _itemTextOffsets = new Map<string, number>();
 
   constructor(config: SessionConfig) {
+    super({
+      parentSessionId: config.parentSessionId,
+      initialId: config.resumeThreadId,
+    });
     this.config = config;
-    this.parentSessionId = config.parentSessionId;
-    this._placeholderId = config.resumeThreadId ?? crypto.randomUUID();
     // If resuming, treat the thread ID as already resolved
     if (config.resumeThreadId) {
       this._resolvedId = config.resumeThreadId;
     }
   }
 
-  get id(): string {
-    return this._resolvedId ?? this._placeholderId;
-  }
-
-  get isActive(): boolean {
-    return this._isActive;
-  }
-
   async *query(prompt: string): AsyncIterable<AIMessage> {
-    if (this._isActive) {
-      yield {
-        type: "error",
-        error: "A query is already in progress. Abort the current query before sending a new one.",
-        code: "session_busy",
-      };
-      return;
-    }
+    const started = this.startQuery();
+    if (!started) { yield BaseSession.BUSY_ERROR; return; }
+    const { gen, signal } = started;
 
-    const gen = ++this._queryGen;
-    this._isActive = true;
-    this._currentAbort = new AbortController();
     this._itemTextOffsets.clear();
 
     try {
@@ -206,9 +184,13 @@ class CodexSDKSession implements AISession {
         }
       }
 
-      const effectivePrompt = this.buildQueryPrompt(prompt);
+      const effectivePrompt = buildEffectivePrompt(
+        prompt,
+        this.config.systemPrompt,
+        this._firstQuerySent,
+      );
       const streamed = await this._thread.runStreamed(effectivePrompt, {
-        signal: this._currentAbort.signal,
+        signal,
       });
 
       this._firstQuerySent = true;
@@ -221,9 +203,7 @@ class CodexSDKSession implements AISession {
           event.type === "thread.started" &&
           typeof event.thread_id === "string"
         ) {
-          const oldId = this._placeholderId;
-          this._resolvedId = event.thread_id;
-          this.onIdResolved?.(oldId, this._resolvedId);
+          this.resolveId(event.thread_id);
         }
 
         if (event.type === "turn.failed") {
@@ -251,32 +231,10 @@ class CodexSDKSession implements AISession {
         code: "provider_error",
       };
     } finally {
-      if (this._queryGen === gen) {
-        this._isActive = false;
-        this._currentAbort = null;
-      }
+      this.endQuery(gen);
     }
   }
 
-  abort(): void {
-    if (this._currentAbort) {
-      this._currentAbort.abort();
-      this._isActive = false;
-      this._currentAbort = null;
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Internal
-  // -------------------------------------------------------------------------
-
-  private buildQueryPrompt(userPrompt: string): string {
-    // On first query, prepend system prompt
-    if (!this._firstQuerySent && this.config.systemPrompt) {
-      return `${this.config.systemPrompt}\n\n---\n\nUser question: ${userPrompt}`;
-    }
-    return userPrompt;
-  }
 }
 
 // ---------------------------------------------------------------------------

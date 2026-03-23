@@ -101,6 +101,22 @@ export function buildForkPreamble(ctx: AIContext): string {
   return lines.join("\n");
 }
 
+/**
+ * Build the effective prompt for a query, prepending a preamble on the first
+ * message. Used by providers that inject context via the prompt itself (Codex,
+ * Pi) rather than a separate system-prompt channel (Claude).
+ */
+export function buildEffectivePrompt(
+  userPrompt: string,
+  preamble: string | null,
+  firstQuerySent: boolean,
+): string {
+  if (!firstQuerySent && preamble) {
+    return `${preamble}\n\n---\n\nUser question: ${userPrompt}`;
+  }
+  return userPrompt;
+}
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
