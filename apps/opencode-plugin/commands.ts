@@ -110,7 +110,7 @@ export async function handleReviewCommand(
         ? "# Code Review\n\nCode review completed — no changes requested."
         : isPRMode
           ? result.feedback
-          : `# Code Review Feedback\n\n${result.feedback}\n\nPlease address this feedback.`;
+          : `${result.feedback}\n\nPlease address this feedback.`;
 
       try {
         await client.session.prompt({
