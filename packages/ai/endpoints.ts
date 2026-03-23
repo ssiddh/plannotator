@@ -59,6 +59,8 @@ export interface AIEndpointDeps {
   registry: ProviderRegistry;
   /** Session manager instance (one per server). */
   sessionManager: SessionManager;
+  /** Resolve the current working directory for new AI sessions. */
+  getCwd?: () => string;
 }
 
 /**
@@ -76,7 +78,7 @@ export interface AIEndpointDeps {
  * ```
  */
 export function createAIEndpoints(deps: AIEndpointDeps) {
-  const { registry, sessionManager } = deps;
+  const { registry, sessionManager, getCwd } = deps;
 
   return {
     "/api/ai/capabilities": async (_req: Request) => {
@@ -127,6 +129,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       try {
         const options: CreateSessionOptions = {
           context,
+          cwd: getCwd?.(),
           model,
           maxTurns,
           maxBudgetUsd,

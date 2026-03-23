@@ -210,6 +210,11 @@ export interface CreateSessionOptions {
   /** The context (plan, diff, file) to seed the session with. */
   context: AIContext;
   /**
+   * Working directory override for the agent session.
+   * Falls back to the provider's configured cwd if omitted.
+   */
+  cwd?: string;
+  /**
    * Model override. Provider-specific string.
    * Falls back to provider default if omitted.
    */

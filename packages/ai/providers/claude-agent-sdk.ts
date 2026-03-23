@@ -83,7 +83,7 @@ export class ClaudeAgentSDKProvider implements AIProvider {
     return new ClaudeAgentSDKSession({
       ...this.baseConfig(options),
       systemPrompt: buildSystemPrompt(options.context),
-      cwd: this.config.cwd ?? process.cwd(),
+      cwd: options.cwd ?? this.config.cwd ?? process.cwd(),
       parentSessionId: null,
       forkFromSession: null,
     });

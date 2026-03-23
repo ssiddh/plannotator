@@ -94,6 +94,12 @@ export async function startReviewServer(
   const draftKey = contentHash(options.rawPatch);
   const editorAnnotations = createEditorAnnotationHandler();
 
+  // Mutable state for diff switching
+  let currentPatch = options.rawPatch;
+  let currentGitRef = options.gitRef;
+  let currentDiffType: DiffType = options.diffType || "uncommitted";
+  let currentError = options.error;
+
   // AI provider setup (graceful — AI features degrade if SDK unavailable)
   const aiRegistry = new ProviderRegistry();
   const aiSessionManager = new SessionManager();
@@ -116,6 +122,11 @@ export async function startReviewServer(
   // Try Codex SDK
   try {
     await import("@plannotator/ai/providers/codex-sdk");
+    // Eagerly verify the SDK is importable — the provider module loads fine
+    // but the actual @openai/codex-sdk import is deferred to first query.
+    // Fail fast here so we don't advertise a broken provider.
+    const pkg = "@openai/codex-sdk";
+    await import(pkg);
     const codexPath = Bun.which("codex");
     const provider = await createProvider({
       type: "codex-sdk",
@@ -129,14 +140,18 @@ export async function startReviewServer(
 
   // Create endpoints if any provider registered
   if (aiRegistry.size > 0) {
-    aiEndpoints = createAIEndpoints({ registry: aiRegistry, sessionManager: aiSessionManager });
+    aiEndpoints = createAIEndpoints({
+      registry: aiRegistry,
+      sessionManager: aiSessionManager,
+      getCwd: () => {
+        if (currentDiffType.startsWith("worktree:")) {
+          const parsed = parseWorktreeDiffType(currentDiffType);
+          if (parsed) return parsed.path;
+        }
+        return gitContext?.cwd ?? process.cwd();
+      },
+    });
   }
-
-  // Mutable state for diff switching
-  let currentPatch = options.rawPatch;
-  let currentGitRef = options.gitRef;
-  let currentDiffType: DiffType = options.diffType || "uncommitted";
-  let currentError = options.error;
 
   const isRemote = isRemoteSession();
   const configuredPort = getServerPort();

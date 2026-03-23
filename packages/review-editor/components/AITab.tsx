@@ -181,7 +181,7 @@ export const AITab: React.FC<AITabProps> = ({
           onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
           hasSession={hasAISession}
         />
-        {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} />}
+        {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} disabled={isStreaming} />}
       </div>
     );
   }
@@ -265,11 +265,13 @@ export const AITab: React.FC<AITabProps> = ({
         selectedModel={aiConfig?.model ?? null}
         onProviderChange={(providerId) => onAIConfigChange?.({ providerId })}
         onModelChange={(model) => onAIConfigChange?.({ model })}
+        selectedReasoningEffort={aiConfig?.reasoningEffort ?? null}
+        onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
         hasSession={hasAISession}
       />
 
       {/* General question input */}
-      {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} />}
+      {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} disabled={isStreaming} />}
     </div>
   );
 };
@@ -279,7 +281,8 @@ const GeneralInput: React.FC<{
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
-}> = ({ value, onChange, onSubmit }) => (
+  disabled?: boolean;
+}> = ({ value, onChange, onSubmit, disabled }) => (
   <div className="border-t border-border/50 p-2">
     <div className="flex gap-1.5">
       <textarea
@@ -288,8 +291,9 @@ const GeneralInput: React.FC<{
         placeholder="Ask about the overall changes..."
         rows={1}
         className="flex-1 px-2.5 py-1.5 bg-muted rounded-md text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+        disabled={disabled}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing && !disabled) {
             e.preventDefault();
             onSubmit();
           }
@@ -297,7 +301,7 @@ const GeneralInput: React.FC<{
       />
       <button
         onClick={onSubmit}
-        disabled={!value.trim()}
+        disabled={disabled || !value.trim()}
         className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
         title={`Send (${submitHint})`}
       >
