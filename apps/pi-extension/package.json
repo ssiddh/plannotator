@@ -27,12 +27,12 @@
     "plannotator.html",
     "review-editor.html",
     "feedback-templates.ts",
-    "storage-core.ts",
-    "draft-core.ts",
-    "project-core.ts"
+    "storage.ts",
+    "draft.ts",
+    "project.ts"
   ],
   "scripts": {
-    "build": "cp ../hook/dist/index.html plannotator.html && cp ../hook/dist/review.html review-editor.html && cp ../../packages/shared/feedback-templates.ts feedback-templates.ts && cp ../../packages/shared/review-core.ts review-core.ts && cp ../../packages/shared/storage.ts storage-core.ts && cp ../../packages/shared/draft.ts draft-core.ts && cp ../../packages/shared/project.ts project-core.ts",
+    "build": "cp ../hook/dist/index.html plannotator.html && cp ../hook/dist/review.html review-editor.html && cp ../../packages/shared/feedback-templates.ts feedback-templates.ts && cp ../../packages/shared/review-core.ts review-core.ts && cp ../../packages/shared/storage.ts storage.ts && cp ../../packages/shared/draft.ts draft.ts && cp ../../packages/shared/project.ts project.ts",
     "prepublishOnly": "cd ../.. && bun run build:pi"
   },
   "peerDependencies": {

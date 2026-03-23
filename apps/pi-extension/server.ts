@@ -37,9 +37,9 @@ import {
   listArchivedPlans,
   readArchivedPlan,
   type ArchivedPlan,
-} from "./storage-core.js";
-import { contentHash, saveDraft, loadDraft, deleteDraft } from "./draft-core.js";
-import { sanitizeTag } from "./project-core.js";
+} from "./storage.js";
+import { contentHash, saveDraft, loadDraft, deleteDraft } from "./draft.js";
+import { sanitizeTag } from "./project.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
