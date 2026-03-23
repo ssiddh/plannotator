@@ -84,8 +84,9 @@ Plannotator supports multiple AI providers. Providers are auto-detected based on
 - **Claude** — Requires the `claude` CLI ([Claude Code](https://docs.anthropic.com/en/docs/claude-code))
 - **Codex** — Requires the `codex` CLI ([OpenAI Codex](https://github.com/openai/codex))
 - **Pi** — Requires the `pi` CLI ([Pi](https://github.com/mariozechner/pi-coding-agent))
+- **OpenCode** — Requires the `opencode` CLI ([OpenCode](https://opencode.ai))
 
-All providers can be available simultaneously. Plannotator does not manage API keys — you must be authenticated with each CLI independently (`claude` uses `~/.claude/` credentials, `codex` uses `OPENAI_API_KEY`, `pi` uses its own local configuration).
+All providers can be available simultaneously. Plannotator does not manage API keys — you must be authenticated with each CLI independently (`claude` uses `~/.claude/` credentials, `codex` uses `OPENAI_API_KEY`, `pi` and `opencode` use their own local configuration).
 
 ### Choosing a provider
 
