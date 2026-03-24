@@ -1141,6 +1141,91 @@ export async function startReviewServer(options: {
     resolveDecision = r;
   });
 
+  // AI provider setup (graceful — AI features degrade if SDK unavailable)
+  // Types are `any` because @plannotator/ai is a dynamic import
+  let aiEndpoints: Record<string, (req: Request) => Promise<Response>> | null = null;
+  let aiSessionManager: { disposeAll: () => void } | null = null;
+  let aiRegistry: { disposeAll: () => void } | null = null;
+  try {
+    const ai = await import("@plannotator/ai");
+    const registry = new ai.ProviderRegistry();
+    const sessionManager = new ai.SessionManager();
+
+    // which() helper for Node.js
+    const whichCmd = (cmd: string): string | null => {
+      try { return execSync(`which ${cmd}`, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim() || null; }
+      catch { return null; }
+    };
+
+    // Claude Agent SDK
+    try {
+      await import("@plannotator/ai/providers/claude-agent-sdk");
+      const claudePath = whichCmd("claude");
+      const provider = await ai.createProvider({
+        type: "claude-agent-sdk",
+        cwd: process.cwd(),
+        ...(claudePath && { claudeExecutablePath: claudePath }),
+      });
+      registry.register(provider);
+    } catch { /* Claude SDK not available */ }
+
+    // Codex SDK
+    try {
+      await import("@plannotator/ai/providers/codex-sdk");
+      await import("@openai/codex-sdk");
+      const codexPath = whichCmd("codex");
+      const provider = await ai.createProvider({
+        type: "codex-sdk",
+        cwd: process.cwd(),
+        ...(codexPath && { codexExecutablePath: codexPath }),
+      });
+      registry.register(provider);
+    } catch { /* Codex SDK not available */ }
+
+    // Pi SDK (Node.js variant)
+    try {
+      await import("@plannotator/ai/providers/pi-sdk-node");
+      const piPath = whichCmd("pi");
+      if (piPath) {
+        const provider = await ai.createProvider({
+          type: "pi-sdk",
+          cwd: process.cwd(),
+          piExecutablePath: piPath,
+        });
+        if (provider && "fetchModels" in provider) {
+          await (provider as { fetchModels: () => Promise<void> }).fetchModels();
+        }
+        registry.register(provider);
+      }
+    } catch { /* Pi not available */ }
+
+    // OpenCode SDK
+    try {
+      await import("@plannotator/ai/providers/opencode-sdk");
+      const opencodePath = whichCmd("opencode");
+      if (opencodePath) {
+        const provider = await ai.createProvider({
+          type: "opencode-sdk",
+          cwd: process.cwd(),
+        });
+        if (provider && "fetchModels" in provider) {
+          await (provider as { fetchModels: () => Promise<void> }).fetchModels();
+        }
+        registry.register(provider);
+      }
+    } catch { /* OpenCode not available */ }
+
+    if (registry.size > 0) {
+      aiEndpoints = ai.createAIEndpoints({
+        registry,
+        sessionManager,
+        getCwd: () => options.gitContext?.cwd ?? process.cwd(),
+      });
+      aiSessionManager = sessionManager;
+      aiRegistry = registry;
+    }
+  } catch { /* AI backbone not available */ }
+
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, `http://localhost`);
 
@@ -1293,6 +1378,26 @@ export async function startReviewServer(options: {
       handleFavicon(res);
     } else if (await editorAnnotations.handle(req, res, url)) {
       return;
+    } else if (aiEndpoints && url.pathname.startsWith("/api/ai/")) {
+      const handler = aiEndpoints[url.pathname];
+      if (handler) {
+        try {
+          const webReq = toWebRequest(req);
+          const webRes = await handler(webReq);
+          // Pipe Web Response → node:http response
+          res.writeHead(webRes.status, Object.fromEntries(webRes.headers.entries()));
+          if (webRes.body) {
+            const nodeStream = Readable.fromWeb(webRes.body as import("stream/web").ReadableStream);
+            nodeStream.pipe(res);
+          } else {
+            res.end();
+          }
+        } catch (err) {
+          json(res, { error: err instanceof Error ? err.message : "AI endpoint error" }, 500);
+        }
+        return;
+      }
+      json(res, { error: "Not found" }, 404);
     } else if (url.pathname === "/api/feedback" && req.method === "POST") {
       const body = await parseBody(req);
       deleteDraft(draftKey);
@@ -1315,7 +1420,11 @@ export async function startReviewServer(options: {
     portSource,
     url: `http://localhost:${port}`,
     waitForDecision: () => decisionPromise,
-    stop: () => server.close(),
+    stop: () => {
+      aiSessionManager?.disposeAll();
+      aiRegistry?.disposeAll();
+      server.close();
+    },
   };
 }
 
