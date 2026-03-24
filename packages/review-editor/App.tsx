@@ -14,6 +14,8 @@ import { getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo } from '
 import { getIdentity } from '@plannotator/ui/utils/identity';
 import { getAgentSwitchSettings, getEffectiveAgentName } from '@plannotator/ui/utils/agentSwitch';
 import { getAIProviderSettings, saveAIProviderSettings, getPreferredModel } from '@plannotator/ui/utils/aiProvider';
+import { AISetupDialog } from '@plannotator/ui/components/AISetupDialog';
+import { needsAISetup } from '@plannotator/ui/utils/aiSetup';
 import { CodeAnnotation, CodeAnnotationType, SelectedLineRange } from '@plannotator/ui/types';
 import { useResizablePanel } from '@plannotator/ui/hooks/useResizablePanel';
 import { useCodeAnnotationDraft } from '@plannotator/ui/hooks/useCodeAnnotationDraft';
@@ -192,6 +194,7 @@ const ReviewApp: React.FC = () => {
       reasoningEffort: null as string | null,
     };
   });
+  const [showAISetup, setShowAISetup] = useState(false);
   const [reviewPanelTabOverride, setReviewPanelTabOverride] = useState<'ai' | undefined>(undefined);
   const aiChat = useAIChat({
     patch: diffData?.rawPatch ?? '',
@@ -207,7 +210,11 @@ const ReviewApp: React.FC = () => {
       .then(data => {
         if (data?.available) {
           setAiAvailable(true);
-          setAiProviders(data.providers ?? []);
+          const providers = data.providers ?? [];
+          setAiProviders(providers);
+          if (providers.length > 0 && needsAISetup()) {
+            setShowAISetup(true);
+          }
         }
       })
       .catch(() => {});
@@ -1507,6 +1514,16 @@ const ReviewApp: React.FC = () => {
           cancelText="Cancel"
           variant="warning"
           showCancel
+        />
+
+        {/* AI setup dialog — first-run only */}
+        <AISetupDialog
+          isOpen={showAISetup}
+          providers={aiProviders}
+          onComplete={(providerId) => {
+            setShowAISetup(false);
+            handleAIConfigChange({ providerId });
+          }}
         />
 
         {/* Completion overlay - shown after approve/feedback */}
