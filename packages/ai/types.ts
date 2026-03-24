@@ -361,7 +361,7 @@ export interface PiSDKConfig extends AIProviderConfig {
 }
 
 export interface OpenCodeConfig extends AIProviderConfig {
-  type: "opencode";
+  type: "opencode-sdk";
   /** Hostname for the OpenCode server. Default: "127.0.0.1". */
   hostname?: string;
   /** Port for the OpenCode server. Default: random. */

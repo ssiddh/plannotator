@@ -41,7 +41,7 @@ export const PROVIDER_META: Record<string, { label: string; icon: React.FC<{ cla
   'claude-agent-sdk': { label: 'Claude', icon: ClaudeIcon },
   'codex-sdk': { label: 'Codex', icon: CodexIcon },
   'pi-sdk': { label: 'Pi', icon: PiIcon },
-  'opencode': { label: 'OpenCode', icon: OpenCodeIcon },
+  'opencode-sdk': { label: 'OpenCode', icon: OpenCodeIcon },
 };
 
 /** Get provider metadata, with fallback for unknown providers. */

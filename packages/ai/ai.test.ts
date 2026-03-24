@@ -326,11 +326,11 @@ describe("ProviderRegistry", () => {
   test("mixed provider types", () => {
     const reg = new ProviderRegistry();
     reg.register(mockProvider("claude-agent-sdk"), "claude-1");
-    reg.register(mockProvider("opencode"), "oc-1");
+    reg.register(mockProvider("opencode-sdk"), "oc-1");
 
     expect(reg.size).toBe(2);
     expect(reg.getByType("claude-agent-sdk").length).toBe(1);
-    expect(reg.getByType("opencode").length).toBe(1);
+    expect(reg.getByType("opencode-sdk").length).toBe(1);
   });
 
   test("disposeAll clears everything", () => {
@@ -403,7 +403,7 @@ describe("AI endpoints", () => {
   test("capabilities lists multiple providers", async () => {
     const { reg, endpoints } = setup();
     reg.register(mockProvider("claude-agent-sdk"), "claude-1");
-    reg.register(mockProvider("opencode"), "oc-1");
+    reg.register(mockProvider("opencode-sdk"), "oc-1");
 
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
@@ -466,7 +466,7 @@ describe("AI endpoints", () => {
   test("session creation with specific provider ID", async () => {
     const { reg, endpoints } = setup();
     reg.register(mockProvider("claude-agent-sdk"), "claude-fast");
-    reg.register(mockProvider("opencode"), "oc-default");
+    reg.register(mockProvider("opencode-sdk"), "oc-default");
 
     const createRes = await endpoints["/api/ai/session"](
       new Request("http://localhost/api/ai/session", {
@@ -1059,7 +1059,7 @@ describe("mapPiEvent", () => {
 // OpenCode event mapping
 // ---------------------------------------------------------------------------
 
-import { mapOpenCodeEvent } from "./providers/opencode.ts";
+import { mapOpenCodeEvent } from "./providers/opencode-sdk.ts";
 
 describe("mapOpenCodeEvent", () => {
   const SESSION_ID = "oc_session_1";

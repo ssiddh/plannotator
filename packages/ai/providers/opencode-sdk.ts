@@ -21,7 +21,7 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PROVIDER_NAME = "opencode";
+const PROVIDER_NAME = "opencode-sdk";
 
 // ---------------------------------------------------------------------------
 // SDK import cache — resolve once, reuse across all sessions
@@ -232,31 +232,32 @@ class OpenCodeSession extends BaseSession {
 			// Subscribe to SSE events
 			const { stream } = await this.config.client.event.subscribe();
 
-			// Send prompt asynchronously
 			try {
-				await this.config.client.session.promptAsync({
-					path: { id: this.config.sessionId },
-					body: {
-						...(!this._firstQuerySent &&
-							this.config.systemPrompt && {
-								system: this.config.systemPrompt,
-							}),
-						...(modelParam && { model: modelParam }),
-						parts: [{ type: "text", text: prompt }],
-					},
-				});
-			} catch (err) {
-				yield {
-					type: "error",
-					error: `OpenCode rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
-					code: "opencode_prompt_rejected",
-				};
-				return;
-			}
-			this._firstQuerySent = true;
+				// Send prompt asynchronously
+				try {
+					await this.config.client.session.promptAsync({
+						path: { id: this.config.sessionId },
+						body: {
+							...(!this._firstQuerySent &&
+								this.config.systemPrompt && {
+									system: this.config.systemPrompt,
+								}),
+							...(modelParam && { model: modelParam }),
+							parts: [{ type: "text", text: prompt }],
+						},
+					});
+				} catch (err) {
+					yield {
+						type: "error",
+						error: `OpenCode rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
+						code: "opencode_prompt_rejected",
+					};
+					return;
+				}
+				this._firstQuerySent = true;
 
-			// Drain SSE events filtered by session ID
-			for await (const event of stream) {
+				// Drain SSE events filtered by session ID
+				for await (const event of stream) {
 					const eventType = event.type as string;
 					const props = event.properties as Record<string, unknown> | undefined;
 					if (!props) continue;
@@ -276,6 +277,9 @@ class OpenCodeSession extends BaseSession {
 						}
 					}
 				}
+			} finally {
+				stream.return?.();
+			}
 		} catch (err) {
 			yield {
 				type: "error",

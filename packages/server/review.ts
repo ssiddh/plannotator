@@ -156,11 +156,11 @@ export async function startReviewServer(
 
   // Try OpenCode
   try {
-    const { OpenCodeProvider } = await import("@plannotator/ai/providers/opencode");
+    const { OpenCodeProvider } = await import("@plannotator/ai/providers/opencode-sdk");
     const opencodePath = Bun.which("opencode");
     if (opencodePath) {
       const provider = await createProvider({
-        type: "opencode",
+        type: "opencode-sdk",
         cwd: process.cwd(),
       });
       if (provider instanceof OpenCodeProvider) {
