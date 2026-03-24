@@ -284,25 +284,30 @@ export async function startReviewServer(options: {
 				json(res, { error: "Not available for PR reviews" }, 400);
 				return;
 			}
-			const body = await parseBody(req);
-			const newType = body.diffType as DiffType;
-			if (!newType) {
-				json(res, { error: "Missing diffType" }, 400);
-				return;
+			try {
+				const body = await parseBody(req);
+				const newType = body.diffType as DiffType;
+				if (!newType) {
+					json(res, { error: "Missing diffType" }, 400);
+					return;
+				}
+				const defaultBranch = options.gitContext?.defaultBranch || "main";
+				const defaultCwd = options.gitContext?.cwd;
+				const result = await runGitDiff(newType, defaultBranch, defaultCwd);
+				currentPatch = result.patch;
+				currentGitRef = result.label;
+				currentDiffType = newType;
+				currentError = result.error;
+				json(res, {
+					rawPatch: currentPatch,
+					gitRef: currentGitRef,
+					diffType: currentDiffType,
+					...(currentError ? { error: currentError } : {}),
+				});
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Failed to switch diff";
+				json(res, { error: message }, 500);
 			}
-			const defaultBranch = options.gitContext?.defaultBranch || "main";
-			const defaultCwd = options.gitContext?.cwd;
-			const result = await runGitDiff(newType, defaultBranch, defaultCwd);
-			currentPatch = result.patch;
-			currentGitRef = result.label;
-			currentDiffType = newType;
-			currentError = result.error;
-			json(res, {
-				rawPatch: currentPatch,
-				gitRef: currentGitRef,
-				diffType: currentDiffType,
-				...(currentError ? { error: currentError } : {}),
-			});
 		} else if (url.pathname === "/api/pr-context" && req.method === "GET") {
 			if (!isPRMode || !prRef) {
 				json(res, { error: "Not in PR mode" }, 400);
@@ -412,13 +417,13 @@ export async function startReviewServer(options: {
 				json(res, { error: "Not available for PR reviews" }, 400);
 				return;
 			}
-			const body = await parseBody(req);
-			const filePath = body.filePath as string | undefined;
-			if (!filePath) {
-				json(res, { error: "Missing filePath" }, 400);
-				return;
-			}
 			try {
+				const body = await parseBody(req);
+				const filePath = body.filePath as string | undefined;
+				if (!filePath) {
+					json(res, { error: "Missing filePath" }, 400);
+					return;
+				}
 				let cwd: string | undefined;
 				if (currentDiffType.startsWith("worktree:")) {
 					const parsed = parseWorktreeDiffType(currentDiffType);
@@ -473,15 +478,20 @@ export async function startReviewServer(options: {
 			}
 			json(res, { error: "Not found" }, 404);
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
-			const body = await parseBody(req);
-			deleteDraft(draftKey);
-			resolveDecision({
-				approved: (body.approved as boolean) ?? false,
-				feedback: (body.feedback as string) || "",
-				annotations: (body.annotations as unknown[]) || [],
-				agentSwitch: body.agentSwitch as string | undefined,
-			});
-			json(res, { ok: true });
+			try {
+				const body = await parseBody(req);
+				deleteDraft(draftKey);
+				resolveDecision({
+					approved: (body.approved as boolean) ?? false,
+					feedback: (body.feedback as string) || "",
+					annotations: (body.annotations as unknown[]) || [],
+					agentSwitch: body.agentSwitch as string | undefined,
+				});
+				json(res, { ok: true });
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Failed to process feedback";
+				json(res, { error: message }, 500);
+			}
 		} else {
 			html(res, options.htmlContent);
 		}

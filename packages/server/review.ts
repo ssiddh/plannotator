@@ -463,6 +463,7 @@ export async function startReviewServer(
           if (aiEndpoints && url.pathname.startsWith("/api/ai/")) {
             const handler = aiEndpoints[url.pathname as keyof AIEndpoints];
             if (handler) return handler(req);
+            return Response.json({ error: "Not found" }, { status: 404 });
           }
 
           // Favicon

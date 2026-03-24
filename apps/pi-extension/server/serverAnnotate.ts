@@ -55,6 +55,9 @@ export async function startAnnotateServer(options: {
 	// Draft key for annotation persistence
 	const draftKey = contentHash(options.markdown);
 
+	// Detect repo info (cached for this session)
+	const repoInfo = getRepoInfo();
+
 	const server = createServer(async (req, res) => {
 		const url = requestUrl(req);
 
@@ -67,7 +70,7 @@ export async function startAnnotateServer(options: {
 				sharingEnabled,
 				shareBaseUrl,
 				pasteApiUrl,
-				repoInfo: getRepoInfo(),
+				repoInfo,
 				projectRoot: process.cwd(),
 			});
 		} else if (url.pathname === "/api/image") {
@@ -76,24 +79,29 @@ export async function startAnnotateServer(options: {
 			await handleUploadRequest(req, res);
 		} else if (url.pathname === "/api/draft") {
 			await handleDraftRequest(req, res, draftKey);
-		} else if (url.pathname === "/api/doc") {
+		} else if (url.pathname === "/api/doc" && req.method === "GET") {
 			// Inject source file's directory as base for relative path resolution
 			if (!url.searchParams.has("base") && options.filePath) {
 				url.searchParams.set("base", dirname(resolvePath(options.filePath)));
 			}
 			handleDocRequest(res, url);
-		} else if (url.pathname === "/api/reference/files") {
+		} else if (url.pathname === "/api/reference/files" && req.method === "GET") {
 			handleFileBrowserRequest(res, url);
 		} else if (url.pathname === "/favicon.svg") {
 			handleFavicon(res);
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
-			const body = await parseBody(req);
-			deleteDraft(draftKey);
-			resolveDecision({
-				feedback: (body.feedback as string) || "",
-				annotations: (body.annotations as unknown[]) || [],
-			});
-			json(res, { ok: true });
+			try {
+				const body = await parseBody(req);
+				deleteDraft(draftKey);
+				resolveDecision({
+					feedback: (body.feedback as string) || "",
+					annotations: (body.annotations as unknown[]) || [],
+				});
+				json(res, { ok: true });
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Failed to process feedback";
+				json(res, { error: message }, 500);
+			}
 		} else {
 			html(res, options.htmlContent);
 		}

@@ -301,6 +301,7 @@ if (args[0] === "sessions") {
     origin: "claude-code",
     sharingEnabled,
     shareBaseUrl,
+    pasteApiUrl,
     htmlContent: planHtmlContent,
     onReady: async (url, isRemote, port) => {
       handleAnnotateServerReady(url, isRemote, port);
@@ -418,6 +419,7 @@ if (args[0] === "sessions") {
     mode: "annotate-last",
     sharingEnabled,
     shareBaseUrl,
+    pasteApiUrl,
     htmlContent: planHtmlContent,
     onReady: async (url, isRemote, port) => {
       handleAnnotateServerReady(url, isRemote, port);

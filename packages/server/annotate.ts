@@ -40,6 +40,8 @@ export interface AnnotateServerOptions {
   sharingEnabled?: boolean;
   /** Custom base URL for share links */
   shareBaseUrl?: string;
+  /** Base URL of the paste service API for short URL sharing */
+  pasteApiUrl?: string;
   /** Called when server starts with the URL, remote status, and port */
   onReady?: (url: string, isRemote: boolean, port: number) => void;
 }
@@ -84,6 +86,7 @@ export async function startAnnotateServer(
     mode = "annotate",
     sharingEnabled = true,
     shareBaseUrl,
+    pasteApiUrl,
     onReady,
   } = options;
 
@@ -126,6 +129,7 @@ export async function startAnnotateServer(
               filePath,
               sharingEnabled,
               shareBaseUrl,
+              pasteApiUrl,
               repoInfo,
               projectRoot: process.cwd(),
             });
