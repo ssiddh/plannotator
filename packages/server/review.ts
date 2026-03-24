@@ -16,7 +16,7 @@ import { handleImage, handleUpload, handleAgents, handleServerReady, handleDraft
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { type PRMetadata, type PRReviewFileComment, fetchPRFileContent, fetchPRContext, submitPRReview, getPRUser, prRefFromMetadata, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
-import { createAIEndpoints, ProviderRegistry, SessionManager, createProvider, type AIEndpoints } from "@plannotator/ai";
+import { createAIEndpoints, ProviderRegistry, SessionManager, createProvider, type AIEndpoints, type PiSDKConfig } from "@plannotator/ai";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
@@ -144,7 +144,7 @@ export async function startReviewServer(
         type: "pi-sdk",
         cwd: process.cwd(),
         piExecutablePath: piPath,
-      });
+      } as PiSDKConfig);
       if (provider instanceof PiSDKProvider) {
         await provider.fetchModels();
       }
@@ -499,15 +499,16 @@ export async function startReviewServer(
     throw new Error("Failed to start server");
   }
 
-  const serverUrl = `http://localhost:${server.port}`;
+  const port = server.port!;
+  const serverUrl = `http://localhost:${port}`;
 
   // Notify caller that server is ready
   if (onReady) {
-    onReady(serverUrl, isRemote, server.port);
+    onReady(serverUrl, isRemote, port);
   }
 
   return {
-    port: server.port,
+    port,
     url: serverUrl,
     isRemote,
     waitForDecision: () => decisionPromise,

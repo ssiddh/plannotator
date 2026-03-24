@@ -44,6 +44,9 @@ jobs:
             printf '// @generated — DO NOT EDIT. Source: packages/shared/%s.ts\n' "$f" | cat - "$src" > "generated/$f.ts"
           done
 
+      - name: Type check
+        run: bun run typecheck
+
       - name: Run tests
         run: bun test
 

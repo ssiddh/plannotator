@@ -229,15 +229,16 @@ export async function startAnnotateServer(
     throw new Error("Failed to start server");
   }
 
-  const serverUrl = `http://localhost:${server.port}`;
+  const port = server.port!;
+  const serverUrl = `http://localhost:${port}`;
 
   // Notify caller that server is ready
   if (onReady) {
-    onReady(serverUrl, isRemote, server.port);
+    onReady(serverUrl, isRemote, port);
   }
 
   return {
-    port: server.port,
+    port,
     url: serverUrl,
     isRemote,
     waitForDecision: () => decisionPromise,

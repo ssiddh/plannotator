@@ -20,8 +20,8 @@ import type {
 } from "../types.ts";
 import { registerProviderFactory } from "../provider.ts";
 
-// Re-export mapPiEvent from the Bun version (runtime-agnostic)
-export { mapPiEvent } from "./pi-sdk.ts";
+// Re-export mapPiEvent from shared (runtime-agnostic)
+export { mapPiEvent } from "./pi-events.ts";
 
 const PROVIDER_NAME = "pi-sdk";
 
@@ -250,8 +250,7 @@ class PiSDKNodeSession extends BaseSession {
 	}
 
 	async *query(prompt: string): AsyncIterable<AIMessage> {
-		// Import mapPiEvent lazily to avoid circular deps at load time
-		const { mapPiEvent } = await import("./pi-sdk.ts");
+		const { mapPiEvent } = await import("./pi-events.ts");
 
 		const started = this.startQuery();
 		if (!started) {

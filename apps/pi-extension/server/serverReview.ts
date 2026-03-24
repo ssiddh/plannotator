@@ -176,6 +176,7 @@ export async function startReviewServer(options: {
 
 		// Claude Agent SDK
 		try {
+			// @ts-ignore — dynamic import; Bun-only types resolved at runtime
 			await import("@plannotator/ai/providers/claude-agent-sdk");
 			const claudePath = whichCmd("claude");
 			const provider = await ai.createProvider({
@@ -190,6 +191,7 @@ export async function startReviewServer(options: {
 
 		// Codex SDK
 		try {
+			// @ts-ignore — dynamic import; Bun-only types resolved at runtime
 			await import("@plannotator/ai/providers/codex-sdk");
 			await import("@openai/codex-sdk");
 			const codexPath = whichCmd("codex");
@@ -226,6 +228,7 @@ export async function startReviewServer(options: {
 
 		// OpenCode SDK
 		try {
+			// @ts-ignore — dynamic import; Bun-only types resolved at runtime
 			await import("@plannotator/ai/providers/opencode-sdk");
 			const opencodePath = whichCmd("opencode");
 			if (opencodePath) {
