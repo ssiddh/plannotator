@@ -213,39 +213,12 @@ COMMAND_EOF
 
 echo "Installed /plannotator-last command to ${OPENCODE_COMMANDS_DIR}/plannotator-last.md"
 
-# --- Gemini CLI support ---
-gemini_binary_name="plannotator-gemini-${platform}"
-gemini_binary_url="https://github.com/${REPO}/releases/download/${latest_tag}/${gemini_binary_name}"
-gemini_checksum_url="${gemini_binary_url}.sha256"
-
-# Only install if the Gemini binary exists in this release
-if curl -fsSL --head "$gemini_binary_url" >/dev/null 2>&1; then
-    echo ""
-    echo "Installing plannotator-gemini ${latest_tag}..."
-
-    gemini_tmp=$(mktemp)
-    curl -fsSL -o "$gemini_tmp" "$gemini_binary_url"
-
-    gemini_expected=$(curl -fsSL "$gemini_checksum_url" | cut -d' ' -f1)
-    if [ "$(uname -s)" = "Darwin" ]; then
-        gemini_actual=$(shasum -a 256 "$gemini_tmp" | cut -d' ' -f1)
-    else
-        gemini_actual=$(sha256sum "$gemini_tmp" | cut -d' ' -f1)
-    fi
-
-    if [ "$gemini_actual" != "$gemini_expected" ]; then
-        echo "Gemini binary checksum verification failed — skipping" >&2
-        rm -f "$gemini_tmp"
-    else
-        rm -f "$INSTALL_DIR/plannotator-gemini" 2>/dev/null || true
-        mv "$gemini_tmp" "$INSTALL_DIR/plannotator-gemini"
-        chmod +x "$INSTALL_DIR/plannotator-gemini"
-        echo "plannotator-gemini installed to ${INSTALL_DIR}/plannotator-gemini"
-
-        # Install Gemini policy file
-        GEMINI_POLICIES_DIR="$HOME/.gemini/policies"
-        mkdir -p "$GEMINI_POLICIES_DIR"
-        cat > "$GEMINI_POLICIES_DIR/plannotator.toml" << 'GEMINI_POLICY_EOF'
+# --- Gemini CLI support (only if Gemini is installed) ---
+if [ -d "$HOME/.gemini" ]; then
+    # Install policy file
+    GEMINI_POLICIES_DIR="$HOME/.gemini/policies"
+    mkdir -p "$GEMINI_POLICIES_DIR"
+    cat > "$GEMINI_POLICIES_DIR/plannotator.toml" << 'GEMINI_POLICY_EOF'
 # Plannotator policy for Gemini CLI
 # Allows exit_plan_mode without TUI confirmation so the browser UI is the sole gate.
 [[rule]]
@@ -253,27 +226,24 @@ toolName = "exit_plan_mode"
 decision = "allow"
 priority = 100
 GEMINI_POLICY_EOF
-        echo "Installed Gemini policy to ${GEMINI_POLICIES_DIR}/plannotator.toml"
+    echo "Installed Gemini policy to ${GEMINI_POLICIES_DIR}/plannotator.toml"
 
-        # Merge hook into ~/.gemini/settings.json
-        GEMINI_SETTINGS="$HOME/.gemini/settings.json"
-        if [ -f "$GEMINI_SETTINGS" ]; then
-            # Check if hook is already configured
-            if ! grep -q 'plannotator-gemini' "$GEMINI_SETTINGS" 2>/dev/null; then
-                echo ""
-                echo "Add the following to your ~/.gemini/settings.json hooks:"
-                echo ""
-                echo '  "hooks": {'
-                echo '    "BeforeTool": [{'
-                echo '      "matcher": "exit_plan_mode",'
-                echo '      "hooks": [{"type": "command", "command": "plannotator-gemini", "timeout": 345600}]'
-                echo '    }]'
-                echo '  }'
-            fi
-        else
-            # Create settings.json with hook config
-            mkdir -p "$HOME/.gemini"
-            cat > "$GEMINI_SETTINGS" << 'GEMINI_SETTINGS_EOF'
+    # Configure hook in settings.json
+    GEMINI_SETTINGS="$HOME/.gemini/settings.json"
+    if [ -f "$GEMINI_SETTINGS" ]; then
+        if ! grep -q '"plannotator"' "$GEMINI_SETTINGS" 2>/dev/null; then
+            echo ""
+            echo "Add the following to your ~/.gemini/settings.json hooks:"
+            echo ""
+            echo '  "hooks": {'
+            echo '    "BeforeTool": [{'
+            echo '      "matcher": "exit_plan_mode",'
+            echo '      "hooks": [{"type": "command", "command": "plannotator", "timeout": 345600}]'
+            echo '    }]'
+            echo '  }'
+        fi
+    else
+        cat > "$GEMINI_SETTINGS" << 'GEMINI_SETTINGS_EOF'
 {
   "hooks": {
     "BeforeTool": [
@@ -282,7 +252,7 @@ GEMINI_POLICY_EOF
         "hooks": [
           {
             "type": "command",
-            "command": "plannotator-gemini",
+            "command": "plannotator",
             "timeout": 345600
           }
         ]
@@ -294,8 +264,7 @@ GEMINI_POLICY_EOF
   }
 }
 GEMINI_SETTINGS_EOF
-            echo "Created Gemini settings at ${GEMINI_SETTINGS}"
-        fi
+        echo "Created Gemini settings at ${GEMINI_SETTINGS}"
     fi
 fi
 
