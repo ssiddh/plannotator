@@ -1,12 +1,14 @@
 /**
- * Pi SDK provider — bridges Plannotator's AI layer with Pi's coding agent.
+ * Pi SDK provider — Node.js variant.
  *
- * Spawns `pi --mode rpc` as a subprocess and communicates via JSONL over
- * stdio. No Pi SDK is imported — this is a thin protocol adapter.
+ * Identical to pi-sdk.ts except PiProcess uses child_process.spawn()
+ * instead of Bun.spawn(). Everything else (PiSDKProvider, PiSDKSession,
+ * mapPiEvent) is re-exported from the Bun version unchanged.
  *
- * One subprocess per session. The user must have the `pi` CLI installed.
+ * Used by the Pi extension which runs under jiti (Node.js).
  */
 
+import { spawn, type ChildProcess } from "node:child_process";
 import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
 import type {
@@ -16,21 +18,21 @@ import type {
 	CreateSessionOptions,
 	PiSDKConfig,
 } from "../types.ts";
+import { registerProviderFactory } from "../provider.ts";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// Re-export mapPiEvent from shared (runtime-agnostic)
+export { mapPiEvent } from "./pi-events.ts";
 
 const PROVIDER_NAME = "pi-sdk";
 
 // ---------------------------------------------------------------------------
-// JSONL subprocess wrapper
+// JSONL subprocess wrapper (Node.js)
 // ---------------------------------------------------------------------------
 
 type EventListener = (event: Record<string, unknown>) => void;
 
-class PiProcess {
-	private proc: ReturnType<typeof Bun.spawn> | null = null;
+class PiProcessNode {
+	private proc: ChildProcess | null = null;
 	private listeners: EventListener[] = [];
 	private pendingRequests = new Map<
 		string,
@@ -44,61 +46,48 @@ class PiProcess {
 	private _alive = false;
 
 	async spawn(piPath: string, cwd: string): Promise<void> {
-		this.proc = Bun.spawn([piPath, "--mode", "rpc"], {
+		this.proc = spawn(piPath, ["--mode", "rpc"], {
 			cwd,
-			stdin: "pipe",
-			stdout: "pipe",
-			stderr: "pipe",
+			stdio: ["pipe", "pipe", "pipe"],
 		});
 		this._alive = true;
 
 		this.readStream();
 
-		this.proc.exited.then(() => {
+		this.proc.on("exit", () => {
 			this._alive = false;
 			for (const [, pending] of this.pendingRequests) {
 				pending.reject(new Error("Pi process exited unexpectedly"));
 			}
 			this.pendingRequests.clear();
-			// Signal active query listeners so the drain loop exits with an error
 			for (const listener of this.listeners) {
 				listener({ type: "process_exited" });
 			}
 		});
 	}
 
-	private async readStream(): Promise<void> {
-		if (!this.proc?.stdout || typeof this.proc.stdout === "number") return;
-		const reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
-		const decoder = new TextDecoder();
+	private readStream(): void {
+		if (!this.proc?.stdout) return;
 
-		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+		this.proc.stdout.on("data", (chunk: Buffer) => {
+			this.buffer += chunk.toString();
+			const lines = this.buffer.split("\n");
+			this.buffer = lines.pop() ?? "";
 
-				this.buffer += decoder.decode(value, { stream: true });
-				const lines = this.buffer.split("\n");
-				this.buffer = lines.pop() ?? "";
-
-				for (const line of lines) {
-					const trimmed = line.replace(/\r$/, "");
-					if (!trimmed) continue;
-					try {
-						const parsed = JSON.parse(trimmed);
-						this.routeMessage(parsed);
-					} catch {
-						// Ignore malformed lines
-					}
+			for (const line of lines) {
+				const trimmed = line.replace(/\r$/, "");
+				if (!trimmed) continue;
+				try {
+					const parsed = JSON.parse(trimmed);
+					this.routeMessage(parsed);
+				} catch {
+					// Ignore malformed lines
 				}
 			}
-		} catch {
-			// Stream closed
-		}
+		});
 	}
 
 	private routeMessage(msg: Record<string, unknown>): void {
-		// Response to a command we sent
 		if (msg.type === "response" && typeof msg.id === "string") {
 			const pending = this.pendingRequests.get(msg.id);
 			if (pending) {
@@ -112,22 +101,16 @@ class PiProcess {
 			}
 		}
 
-		// Agent event — forward to listeners
 		for (const listener of this.listeners) {
 			listener(msg);
 		}
 	}
 
-	/** Send a command without waiting for a response. */
 	send(command: Record<string, unknown>): void {
-		if (!this.proc?.stdin || typeof this.proc.stdin === "number") return;
-		// Bun.spawn stdin is a FileSink with .write(), not a WritableStream
-		const sink = this.proc.stdin as { write(data: string): void; flush(): void };
-		sink.write(`${JSON.stringify(command)}\n`);
-		sink.flush();
+		if (!this.proc?.stdin || this.proc.stdin.destroyed) return;
+		this.proc.stdin.write(`${JSON.stringify(command)}\n`);
 	}
 
-	/** Send a command and wait for the correlated response. */
 	sendAndWait(
 		command: Record<string, unknown>,
 	): Promise<Record<string, unknown>> {
@@ -138,7 +121,6 @@ class PiProcess {
 		});
 	}
 
-	/** Register a listener for agent events (non-response messages). */
 	onEvent(listener: EventListener): () => void {
 		this.listeners.push(listener);
 		return () => {
@@ -166,10 +148,10 @@ class PiProcess {
 }
 
 // ---------------------------------------------------------------------------
-// Provider
+// Provider (identical to pi-sdk.ts, using PiProcessNode)
 // ---------------------------------------------------------------------------
 
-export class PiSDKProvider implements AIProvider {
+export class PiSDKNodeProvider implements AIProvider {
 	readonly name = PROVIDER_NAME;
 	readonly capabilities: AIProviderCapabilities = {
 		fork: false,
@@ -180,14 +162,14 @@ export class PiSDKProvider implements AIProvider {
 	models?: Array<{ id: string; label: string; default?: boolean }>;
 
 	private config: PiSDKConfig;
-	private sessions = new Map<string, PiSDKSession>();
+	private sessions = new Map<string, PiSDKNodeSession>();
 
 	constructor(config: PiSDKConfig) {
 		this.config = config;
 	}
 
-	async createSession(options: CreateSessionOptions): Promise<PiSDKSession> {
-		const session = new PiSDKSession({
+	async createSession(options: CreateSessionOptions): Promise<PiSDKNodeSession> {
+		const session = new PiSDKNodeSession({
 			systemPrompt: buildSystemPrompt(options.context),
 			cwd: options.cwd ?? this.config.cwd ?? process.cwd(),
 			parentSessionId: null,
@@ -216,27 +198,20 @@ export class PiSDKProvider implements AIProvider {
 		this.sessions.clear();
 	}
 
-	/** Fetch available models from Pi. Call before registering the provider. */
 	async fetchModels(): Promise<void> {
 		const piPath = this.config.piExecutablePath ?? "pi";
-
-		let proc: PiProcess | undefined;
-
+		let proc: PiProcessNode | undefined;
 		try {
-			proc = new PiProcess();
+			proc = new PiProcessNode();
 			await proc.spawn(piPath, this.config.cwd ?? process.cwd());
-
 			const data = await Promise.race([
 				proc.sendAndWait({ type: "get_available_models" }),
 				new Promise<never>((_, reject) =>
 					setTimeout(() => reject(new Error("Timeout")), 10_000),
 				),
 			]);
-
 			const rawModels = (
-				data as {
-					models?: Array<{ provider: string; id: string; name?: string }>;
-				}
+				data as { models?: Array<{ provider: string; id: string; name?: string }> }
 			).models;
 			if (rawModels && rawModels.length > 0) {
 				this.models = rawModels.map((m, i) => ({
@@ -254,7 +229,7 @@ export class PiSDKProvider implements AIProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Session
+// Session (identical to pi-sdk.ts, using PiProcessNode)
 // ---------------------------------------------------------------------------
 
 interface SessionConfig {
@@ -262,13 +237,12 @@ interface SessionConfig {
 	cwd: string;
 	parentSessionId: string | null;
 	piExecutablePath: string;
-	/** Model in "provider/modelId" format, e.g. "anthropic/claude-haiku-4-5". */
 	model?: string;
 }
 
-class PiSDKSession extends BaseSession {
+class PiSDKNodeSession extends BaseSession {
 	private config: SessionConfig;
-	private process: PiProcess | null = null;
+	private process: PiProcessNode | null = null;
 
 	constructor(config: SessionConfig) {
 		super({ parentSessionId: config.parentSessionId });
@@ -276,6 +250,8 @@ class PiSDKSession extends BaseSession {
 	}
 
 	async *query(prompt: string): AsyncIterable<AIMessage> {
+		const { mapPiEvent } = await import("./pi-events.ts");
+
 		const started = this.startQuery();
 		if (!started) {
 			yield BaseSession.BUSY_ERROR;
@@ -284,71 +260,49 @@ class PiSDKSession extends BaseSession {
 		const { gen } = started;
 
 		try {
-			// Lazy-spawn subprocess
 			if (!this.process || !this.process.alive) {
-				this.process = new PiProcess();
+				this.process = new PiProcessNode();
 				await this.process.spawn(this.config.piExecutablePath, this.config.cwd);
 
-				// Set model if specified (format: "provider/modelId")
 				if (this.config.model) {
 					const [provider, ...rest] = this.config.model.split("/");
 					const modelId = rest.join("/");
 					if (provider && modelId) {
 						try {
-							await this.process.sendAndWait({
-								type: "set_model",
-								provider,
-								modelId,
-							});
-						} catch {
-							// Continue with Pi's default model
-						}
+							await this.process.sendAndWait({ type: "set_model", provider, modelId });
+						} catch { /* Continue with Pi's default model */ }
 					}
 				}
 
-				// Get session ID
 				try {
 					const state = await this.process.sendAndWait({ type: "get_state" });
 					if (typeof state.sessionId === "string") {
 						this.resolveId(state.sessionId);
 					}
-				} catch {
-					// Continue with placeholder ID
-				}
+				} catch { /* Continue with placeholder ID */ }
 
-				// If subprocess died during startup, surface the error immediately
 				if (!this.process.alive) {
 					yield {
 						type: "error",
-						error:
-							"Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
+						error: "Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
 						code: "pi_startup_error",
 					};
 					return;
 				}
 			}
 
-			// Build effective prompt (prepend system prompt on first query)
 			const effectivePrompt = buildEffectivePrompt(
 				prompt,
 				this.config.systemPrompt,
 				this._firstQuerySent,
 			);
 
-			// Set up async queue to bridge callback events → async iterable
 			const queue: AIMessage[] = [];
 			let resolve: (() => void) | null = null;
 			let done = false;
 
-			const push = (msg: AIMessage) => {
-				queue.push(msg);
-				resolve?.();
-			};
-
-			const finish = () => {
-				done = true;
-				resolve?.();
-			};
+			const push = (msg: AIMessage) => { queue.push(msg); resolve?.(); };
+			const finish = () => { done = true; resolve?.(); };
 
 			const unsubscribe = this.process.onEvent((event) => {
 				const mapped = mapPiEvent(event, this.id);
@@ -356,21 +310,15 @@ class PiSDKSession extends BaseSession {
 					push(msg);
 					if (
 						msg.type === "result" ||
-						(msg.type === "error" &&
-							(event.type === "agent_end" || event.type === "process_exited"))
+						(msg.type === "error" && (event.type === "agent_end" || event.type === "process_exited"))
 					) {
 						finish();
 					}
 				}
 			});
 
-			// Send prompt — use sendAndWait to catch RPC-level rejections
-			// (e.g. expired credentials, invalid session)
 			try {
-				await this.process.sendAndWait({
-					type: "prompt",
-					message: effectivePrompt,
-				});
+				await this.process.sendAndWait({ type: "prompt", message: effectivePrompt });
 			} catch (err) {
 				unsubscribe();
 				yield {
@@ -382,15 +330,12 @@ class PiSDKSession extends BaseSession {
 			}
 			this._firstQuerySent = true;
 
-			// Drain queue
 			try {
 				while (!done || queue.length > 0) {
 					if (queue.length > 0) {
 						yield queue.shift()!;
 					} else {
-						await new Promise<void>((r) => {
-							resolve = r;
-						});
+						await new Promise<void>((r) => { resolve = r; });
 						resolve = null;
 					}
 				}
@@ -415,7 +360,6 @@ class PiSDKSession extends BaseSession {
 		super.abort();
 	}
 
-	/** Kill the subprocess. Called by the provider on dispose. */
 	killProcess(): void {
 		this.process?.kill();
 		this.process = null;
@@ -423,19 +367,10 @@ class PiSDKSession extends BaseSession {
 }
 
 // ---------------------------------------------------------------------------
-// Event mapping — shared with pi-sdk-node.ts
-// ---------------------------------------------------------------------------
-
-import { mapPiEvent } from "./pi-events.ts";
-export { mapPiEvent } from "./pi-events.ts";
-
-// ---------------------------------------------------------------------------
 // Factory registration
 // ---------------------------------------------------------------------------
 
-import { registerProviderFactory } from "../provider.ts";
-
 registerProviderFactory(
 	PROVIDER_NAME,
-	async (config) => new PiSDKProvider(config as PiSDKConfig),
+	async (config) => new PiSDKNodeProvider(config as PiSDKConfig),
 );

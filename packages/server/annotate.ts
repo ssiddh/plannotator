@@ -40,6 +40,8 @@ export interface AnnotateServerOptions {
   sharingEnabled?: boolean;
   /** Custom base URL for share links */
   shareBaseUrl?: string;
+  /** Base URL of the paste service API for short URL sharing */
+  pasteApiUrl?: string;
   /** Called when server starts with the URL, remote status, and port */
   onReady?: (url: string, isRemote: boolean, port: number) => void;
 }
@@ -84,6 +86,7 @@ export async function startAnnotateServer(
     mode = "annotate",
     sharingEnabled = true,
     shareBaseUrl,
+    pasteApiUrl,
     onReady,
   } = options;
 
@@ -126,6 +129,7 @@ export async function startAnnotateServer(
               filePath,
               sharingEnabled,
               shareBaseUrl,
+              pasteApiUrl,
               repoInfo,
               projectRoot: process.cwd(),
             });
@@ -225,15 +229,16 @@ export async function startAnnotateServer(
     throw new Error("Failed to start server");
   }
 
-  const serverUrl = `http://localhost:${server.port}`;
+  const port = server.port!;
+  const serverUrl = `http://localhost:${port}`;
 
   // Notify caller that server is ready
   if (onReady) {
-    onReady(serverUrl, isRemote, server.port);
+    onReady(serverUrl, isRemote, port);
   }
 
   return {
-    port: server.port,
+    port,
     url: serverUrl,
     isRemote,
     waitForDecision: () => decisionPromise,

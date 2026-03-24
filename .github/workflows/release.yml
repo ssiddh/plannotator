@@ -38,10 +38,14 @@ jobs:
       - name: Generate Pi extension shared copies
         run: |
           cd apps/pi-extension
-          for f in feedback-templates review-core storage draft project; do
+          mkdir -p generated
+          for f in feedback-templates review-core storage draft project pr-provider pr-github pr-gitlab checklist integrations-common repo reference-common favicon resolve-file; do
             src="../../packages/shared/$f.ts"
-            printf '// @generated — DO NOT EDIT. Source: packages/shared/%s.ts\n' "$f" | cat - "$src" > "$f.ts"
+            printf '// @generated — DO NOT EDIT. Source: packages/shared/%s.ts\n' "$f" | cat - "$src" > "generated/$f.ts"
           done
+
+      - name: Type check
+        run: bun run typecheck
 
       - name: Run tests
         run: bun test

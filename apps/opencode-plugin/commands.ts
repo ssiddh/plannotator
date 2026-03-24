@@ -14,8 +14,8 @@ import {
   handleAnnotateServerReady,
 } from "@plannotator/server/annotate";
 import { getGitContext, runGitDiffWithContext } from "@plannotator/server/git";
-import { parsePRUrl, checkAuth, fetchPR, getCliName, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
-import { resolveMarkdownFile } from "@plannotator/server/resolve-file";
+import { parsePRUrl, checkPRAuth, fetchPR, getCliName, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
+import { resolveMarkdownFile } from "@plannotator/shared/resolve-file";
 
 /** Shared dependencies injected by the plugin */
 export interface CommandDeps {
@@ -53,7 +53,7 @@ export async function handleReviewCommand(
     client.app.log({ level: "info", message: `Fetching ${getMRLabel(prRef)} ${getMRNumberLabel(prRef)} from ${getDisplayRepo(prRef)}...` });
 
     try {
-      await checkAuth(prRef);
+      await checkPRAuth(prRef);
     } catch (err) {
       const cliName = getCliName(prRef);
       client.app.log({ level: "error", message: err instanceof Error ? err.message : `${cliName} auth check failed` });

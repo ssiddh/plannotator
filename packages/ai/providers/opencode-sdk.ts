@@ -82,7 +82,7 @@ export class OpenCodeProvider implements AIProvider {
 		});
 
 		this.client = createOpencodeClient({
-			baseUrl: this.server.url,
+			baseUrl: this.server!.url,
 			directory: this.config.cwd ?? process.cwd(),
 		});
 	}

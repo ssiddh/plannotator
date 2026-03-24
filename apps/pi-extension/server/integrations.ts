@@ -1,11 +1,12 @@
 /**
- * Note-taking app integrations (Obsidian, Bear)
+ * Note-taking app integrations (Obsidian, Bear, Octarine).
+ * Node.js equivalents of packages/server/integrations.ts.
+ * Config types, save functions, tag extraction, filename generation
  */
 
-import { $ } from "bun";
-import { join } from "path";
-import { mkdirSync, existsSync, statSync } from "fs";
-import { detectProjectName } from "./project";
+import { execSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
 import {
 	type ObsidianConfig,
@@ -20,24 +21,46 @@ import {
 	buildHashtags,
 	buildBearContent,
 	detectObsidianVaults,
-} from "@plannotator/shared/integrations-common";
+} from "../generated/integrations-common.js";
+import { sanitizeTag } from "../generated/project.js";
 
 export type { ObsidianConfig, BearConfig, OctarineConfig, IntegrationResult };
-export { detectObsidianVaults, extractTitle, generateFrontmatter, generateFilename, generateOctarineFrontmatter, stripH1, buildHashtags, buildBearContent };
+export {
+	extractTitle,
+	generateFrontmatter,
+	generateFilename,
+	generateOctarineFrontmatter,
+	stripH1,
+	buildHashtags,
+	buildBearContent,
+	detectObsidianVaults,
+};
 
-/**
- * Extract tags from markdown content using simple heuristics
- * Includes project name detection (git repo or directory name)
- */
+/** Detect project name from git or cwd (sync). Used by extractTags for note integrations. */
+function detectProjectNameSync(): string | null {
+	try {
+		const toplevel = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"],
+		}).trim();
+		if (toplevel) {
+			const name = sanitizeTag(basename(toplevel));
+			if (name) return name;
+		}
+	} catch {
+		/* not in a git repo */
+	}
+	try {
+		return sanitizeTag(basename(process.cwd())) ?? null;
+	} catch {
+		return null;
+	}
+}
+
 export async function extractTags(markdown: string): Promise<string[]> {
 	const tags = new Set<string>(["plannotator"]);
-
-	// Add project name tag (git repo name or directory fallback)
-	const projectName = await detectProjectName();
-	if (projectName) {
-		tags.add(projectName);
-	}
-
+	const projectName = detectProjectNameSync();
+	if (projectName) tags.add(projectName);
 	const stopWords = new Set([
 		"the",
 		"and",
@@ -54,138 +77,98 @@ export async function extractTags(markdown: string): Promise<string[]> {
 		"step",
 		"steps",
 	]);
-
-	// Extract from first H1 title
 	const h1Match = markdown.match(
 		/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im,
 	);
 	if (h1Match) {
-		const titleWords = h1Match[1]
+		h1Match[1]
 			.toLowerCase()
 			.replace(/[^\w\s-]/g, " ")
 			.split(/\s+/)
-			.filter((word) => word.length > 2 && !stopWords.has(word));
-		titleWords.slice(0, 3).forEach((word) => tags.add(word));
+			.filter((w) => w.length > 2 && !stopWords.has(w))
+			.slice(0, 3)
+			.forEach((w) => tags.add(w));
 	}
-
-	// Extract code fence languages
-	const langMatches = markdown.matchAll(/```(\w+)/g);
 	const seenLangs = new Set<string>();
-	for (const [, lang] of langMatches) {
-		const normalizedLang = lang.toLowerCase();
+	let langMatch: RegExpExecArray | null;
+	const langRegex = /```(\w+)/g;
+	while ((langMatch = langRegex.exec(markdown)) !== null) {
+		const lang = langMatch[1];
+		const n = lang.toLowerCase();
 		if (
-			!seenLangs.has(normalizedLang) &&
-			!["json", "yaml", "yml", "text", "txt", "markdown", "md"].includes(
-				normalizedLang,
-			)
+			!seenLangs.has(n) &&
+			!["json", "yaml", "yml", "text", "txt", "markdown", "md"].includes(n)
 		) {
-			seenLangs.add(normalizedLang);
-			tags.add(normalizedLang);
+			seenLangs.add(n);
+			tags.add(n);
 		}
 	}
-
 	return Array.from(tags).slice(0, 7);
 }
 
-// --- Obsidian Integration ---
-
-/**
- * Save plan to Obsidian vault with cross-platform path handling
- */
 export async function saveToObsidian(
 	config: ObsidianConfig,
 ): Promise<IntegrationResult> {
 	try {
 		const { vaultPath, folder, plan } = config;
-
-		// Normalize path (handle ~ on Unix, forward/back slashes)
 		let normalizedVault = vaultPath.trim();
-
-		// Expand ~ to home directory (Unix/macOS)
 		if (normalizedVault.startsWith("~")) {
 			const home = process.env.HOME || process.env.USERPROFILE || "";
 			normalizedVault = join(home, normalizedVault.slice(1));
 		}
-
-		// Validate vault path exists and is a directory
-		if (!existsSync(normalizedVault)) {
+		if (!existsSync(normalizedVault))
 			return {
 				success: false,
 				error: `Vault path does not exist: ${normalizedVault}`,
 			};
-		}
-
-		const vaultStat = statSync(normalizedVault);
-		if (!vaultStat.isDirectory()) {
+		if (!statSync(normalizedVault).isDirectory())
 			return {
 				success: false,
 				error: `Vault path is not a directory: ${normalizedVault}`,
 			};
-		}
-
-		// Build target folder path
 		const folderName = folder.trim() || "plannotator";
 		const targetFolder = join(normalizedVault, folderName);
-
-		// Create folder if it doesn't exist (guard for Bun mkdirSync regression)
-		if (!existsSync(targetFolder)) {
-			mkdirSync(targetFolder, { recursive: true });
-		}
-
-		// Generate filename and full path
+		if (!existsSync(targetFolder)) mkdirSync(targetFolder, { recursive: true });
 		const filename = generateFilename(
 			plan,
 			config.filenameFormat,
 			config.filenameSeparator,
 		);
 		const filePath = join(targetFolder, filename);
-
-		// Generate content with frontmatter and backlink
 		const tags = await extractTags(plan);
 		const frontmatter = generateFrontmatter(tags);
 		const content = `${frontmatter}\n\n[[Plannotator Plans]]\n\n${plan}`;
-
-		// Write file
-		await Bun.write(filePath, content);
-
+		writeFileSync(filePath, content);
 		return { success: true, path: filePath };
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return { success: false, error: message };
+		return {
+			success: false,
+			error: err instanceof Error ? err.message : "Unknown error",
+		};
 	}
 }
 
-/**
- * Save plan to Bear using x-callback-url
- */
 export async function saveToBear(
 	config: BearConfig,
 ): Promise<IntegrationResult> {
 	try {
 		const { plan, customTags, tagPosition = "append" } = config;
-
 		const title = extractTitle(plan);
 		const body = stripH1(plan);
-
 		const tags = customTags?.trim() ? undefined : await extractTags(plan);
 		const hashtags = buildHashtags(customTags, tags ?? []);
-
 		const content = buildBearContent(body, hashtags, tagPosition);
-
 		const url = `bear://x-callback-url/create?title=${encodeURIComponent(title)}&text=${encodeURIComponent(content)}&open_note=no`;
-
-		await $`open ${url}`.quiet();
-
+		spawn("open", [url], { stdio: "ignore" });
 		return { success: true };
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return { success: false, error: message };
+		return {
+			success: false,
+			error: err instanceof Error ? err.message : "Unknown error",
+		};
 	}
 }
 
-/**
- * Save plan to Octarine using octarine:// URI scheme
- */
 export async function saveToOctarine(
 	config: OctarineConfig,
 ): Promise<IntegrationResult> {
@@ -194,23 +177,19 @@ export async function saveToOctarine(
 		const workspace = config.workspace.trim();
 		if (!workspace) return { success: false, error: "Workspace is required" };
 		const folder = config.folder.trim() || "plannotator";
-
 		const filename = generateFilename(plan);
-		// Strip .md — Octarine auto-adds it
-		const basename = filename.replace(/\.md$/, "");
-		const path = folder ? `${folder}/${basename}` : basename;
-
+		const base = filename.replace(/\.md$/, "");
+		const path = folder ? `${folder}/${base}` : base;
 		const tags = await extractTags(plan);
 		const frontmatter = generateOctarineFrontmatter(tags);
 		const content = `${frontmatter}\n\n${plan}`;
-
 		const url = `octarine://create?path=${encodeURIComponent(path)}&content=${encodeURIComponent(content)}&workspace=${encodeURIComponent(workspace)}&fresh=true&openAfter=false`;
-
-		await $`open ${url}`.quiet();
-
+		spawn("open", [url], { stdio: "ignore" });
 		return { success: true, path };
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return { success: false, error: message };
+		return {
+			success: false,
+			error: err instanceof Error ? err.message : "Unknown error",
+		};
 	}
 }
