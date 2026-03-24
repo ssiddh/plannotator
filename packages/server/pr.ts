@@ -68,11 +68,11 @@ const runtime: PRRuntime = {
 
 export const parsePRUrl = parsePRUrlCore;
 
-export function checkAuth(ref: PRRef): Promise<void> {
+export function checkPRAuth(ref: PRRef): Promise<void> {
   return checkAuthCore(runtime, ref);
 }
 
-export function getUser(ref: PRRef): Promise<string | null> {
+export function getPRUser(ref: PRRef): Promise<string | null> {
   return getUserCore(runtime, ref);
 }
 

@@ -49,7 +49,7 @@ import {
   handleAnnotateServerReady,
 } from "@plannotator/server/annotate";
 import { getGitContext, runGitDiff } from "@plannotator/server/git";
-import { parsePRUrl, checkAuth, fetchPR, getCliName, getCliInstallUrl, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
+import { parsePRUrl, checkPRAuth, fetchPR, getCliName, getCliInstallUrl, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
 import { writeRemoteShareLink } from "@plannotator/server/share-url";
 import { resolveMarkdownFile } from "@plannotator/shared/resolve-file";
 import { registerSession, unregisterSession, listSessions } from "@plannotator/server/sessions";
@@ -165,7 +165,7 @@ if (args[0] === "sessions") {
     const cliUrl = getCliInstallUrl(prRef);
 
     try {
-      await checkAuth(prRef);
+      await checkPRAuth(prRef);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("not found") || msg.includes("ENOENT")) {

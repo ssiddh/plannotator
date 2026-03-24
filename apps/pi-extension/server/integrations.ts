@@ -6,7 +6,7 @@
 
 import { execSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import {
 	type ObsidianConfig,
@@ -22,6 +22,7 @@ import {
 	buildBearContent,
 	detectObsidianVaults,
 } from "../generated/integrations-common.js";
+import { sanitizeTag } from "../generated/project.js";
 
 export type { ObsidianConfig, BearConfig, OctarineConfig, IntegrationResult };
 export {
@@ -35,24 +36,22 @@ export {
 	detectObsidianVaults,
 };
 
-/** Detect project name from git or cwd. Node.js equivalent of packages/server/project.ts */
-export function detectProjectNameSync(): string | null {
+/** Detect project name from git or cwd (sync). Used by extractTags for note integrations. */
+function detectProjectNameSync(): string | null {
 	try {
-		const result = execSync("git rev-parse --show-toplevel", {
+		const toplevel = execSync("git rev-parse --show-toplevel", {
 			encoding: "utf-8",
 			stdio: ["pipe", "pipe", "pipe"],
 		}).trim();
-		if (result) {
-			const { extractRepoName } = require("./project.js");
-			const name = extractRepoName(result);
+		if (toplevel) {
+			const name = sanitizeTag(basename(toplevel));
 			if (name) return name;
 		}
 	} catch {
 		/* not in a git repo */
 	}
 	try {
-		const { extractDirName } = require("./project.js");
-		return extractDirName(process.cwd());
+		return sanitizeTag(basename(process.cwd())) ?? null;
 	} catch {
 		return null;
 	}

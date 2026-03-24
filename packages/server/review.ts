@@ -15,7 +15,7 @@ import { getRepoInfo } from "./repo";
 import { handleImage, handleUpload, handleAgents, handleServerReady, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, type OpencodeClient } from "./shared-handlers";
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
-import { type PRMetadata, type PRReviewFileComment, fetchPRFileContent, fetchPRContext, submitPRReview, getUser, prRefFromMetadata, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
+import { type PRMetadata, type PRReviewFileComment, fetchPRFileContent, fetchPRContext, submitPRReview, getPRUser, prRefFromMetadata, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
 import { createAIEndpoints, ProviderRegistry, SessionManager, createProvider, type AIEndpoints } from "@plannotator/ai";
 
 // Re-export utilities
@@ -198,7 +198,7 @@ export async function startReviewServer(
 
   // Fetch current platform user (for own-PR/MR detection)
   const prRef = isPRMode ? prRefFromMetadata(prMetadata) : null;
-  const platformUser = prRef ? await getUser(prRef) : null;
+  const platformUser = prRef ? await getPRUser(prRef) : null;
 
   // Decision promise
   let resolveDecision: (result: {
