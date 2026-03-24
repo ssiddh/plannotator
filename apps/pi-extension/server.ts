@@ -36,6 +36,8 @@ import {
   listVersions,
   listArchivedPlans,
   readArchivedPlan,
+  saveAnnotations,
+  saveFinalSnapshot,
   type ArchivedPlan,
 } from "./storage.js";
 import { contentHash, saveDraft, loadDraft, deleteDraft } from "./draft.js";
@@ -608,6 +610,184 @@ function openEditorDiff(oldPath: string, newPath: string): Promise<{ ok: true } 
   });
 }
 
+// ── Note Integrations (Node.js) ─────────────────────────────────────────
+// Node.js equivalents of packages/server/integrations.ts
+
+interface ObsidianConfig {
+  vaultPath: string;
+  folder: string;
+  plan: string;
+  filenameFormat?: string;
+  filenameSeparator?: "space" | "dash" | "underscore";
+}
+
+interface BearConfig {
+  plan: string;
+  customTags?: string;
+  tagPosition?: "prepend" | "append";
+}
+
+interface OctarineConfig {
+  plan: string;
+  workspace: string;
+  folder: string;
+}
+
+interface IntegrationResult {
+  success: boolean;
+  error?: string;
+  path?: string;
+}
+
+/** Detect project name from git or cwd. Node.js equivalent of packages/server/project.ts */
+function detectProjectNameSync(): string | null {
+  try {
+    const result = execSync("git rev-parse --show-toplevel", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (result) {
+      const { extractRepoName } = require("./project.js");
+      const name = extractRepoName(result);
+      if (name) return name;
+    }
+  } catch { /* not in a git repo */ }
+  try {
+    const { extractDirName } = require("./project.js");
+    return extractDirName(process.cwd());
+  } catch { return null; }
+}
+
+function extractTitle(markdown: string): string {
+  const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+  if (h1Match) {
+    return h1Match[1].trim().replace(/[<>:"/\\|?*(){}\[\]#~`]/g, "").replace(/\s+/g, " ").trim().slice(0, 50);
+  }
+  return "Plan";
+}
+
+async function extractTags(markdown: string): Promise<string[]> {
+  const tags = new Set<string>(["plannotator"]);
+  const projectName = detectProjectNameSync();
+  if (projectName) tags.add(projectName);
+  const stopWords = new Set(["the","and","for","with","this","that","from","into","plan","implementation","overview","phase","step","steps"]);
+  const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+  if (h1Match) {
+    h1Match[1].toLowerCase().replace(/[^\w\s-]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !stopWords.has(w)).slice(0, 3).forEach((w) => tags.add(w));
+  }
+  const langMatches = markdown.matchAll(/```(\w+)/g);
+  const seenLangs = new Set<string>();
+  for (const [, lang] of langMatches) {
+    const n = lang.toLowerCase();
+    if (!seenLangs.has(n) && !["json","yaml","yml","text","txt","markdown","md"].includes(n)) { seenLangs.add(n); tags.add(n); }
+  }
+  return Array.from(tags).slice(0, 7);
+}
+
+function generateFrontmatter(tags: string[]): string {
+  const now = new Date().toISOString();
+  const tagList = tags.map((t) => t.toLowerCase()).join(", ");
+  return `---\ncreated: ${now}\nsource: plannotator\ntags: [${tagList}]\n---`;
+}
+
+const DEFAULT_FILENAME_FORMAT = "{title} - {Mon} {D}, {YYYY} {h}-{mm}{ampm}";
+
+function generateFilename(markdown: string, format?: string, separator?: "space" | "dash" | "underscore"): string {
+  const title = extractTitle(markdown);
+  const now = new Date();
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const hour24 = now.getHours();
+  const hour12 = hour24 % 12 || 12;
+  const ampm = hour24 >= 12 ? "pm" : "am";
+  const vars: Record<string, string> = {
+    title, YYYY: String(now.getFullYear()), MM: String(now.getMonth()+1).padStart(2,"0"),
+    DD: String(now.getDate()).padStart(2,"0"), Mon: months[now.getMonth()], D: String(now.getDate()),
+    HH: String(hour24).padStart(2,"0"), h: String(hour12), hh: String(hour12).padStart(2,"0"),
+    mm: String(now.getMinutes()).padStart(2,"0"), ss: String(now.getSeconds()).padStart(2,"0"), ampm,
+  };
+  const template = format?.trim() || DEFAULT_FILENAME_FORMAT;
+  const result = template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
+  let sanitized = result.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, " ").trim();
+  if (separator === "dash") sanitized = sanitized.replace(/ /g, "-");
+  else if (separator === "underscore") sanitized = sanitized.replace(/ /g, "_");
+  return sanitized.endsWith(".md") ? sanitized : `${sanitized}.md`;
+}
+
+async function saveToObsidian(config: ObsidianConfig): Promise<IntegrationResult> {
+  try {
+    const { vaultPath, folder, plan } = config;
+    let normalizedVault = vaultPath.trim();
+    if (normalizedVault.startsWith("~")) {
+      const home = process.env.HOME || process.env.USERPROFILE || "";
+      normalizedVault = join(home, normalizedVault.slice(1));
+    }
+    if (!existsSync(normalizedVault)) return { success: false, error: `Vault path does not exist: ${normalizedVault}` };
+    if (!statSync(normalizedVault).isDirectory()) return { success: false, error: `Vault path is not a directory: ${normalizedVault}` };
+    const folderName = folder.trim() || "plannotator";
+    const targetFolder = join(normalizedVault, folderName);
+    if (!existsSync(targetFolder)) mkdirSync(targetFolder, { recursive: true });
+    const filename = generateFilename(plan, config.filenameFormat, config.filenameSeparator);
+    const filePath = join(targetFolder, filename);
+    const tags = await extractTags(plan);
+    const frontmatter = generateFrontmatter(tags);
+    const content = `${frontmatter}\n\n[[Plannotator Plans]]\n\n${plan}`;
+    writeFileSync(filePath, content);
+    return { success: true, path: filePath };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+function stripH1(plan: string): string { return plan.replace(/^#\s+.+\n?/m, "").trimStart(); }
+
+function buildHashtags(customTags: string | undefined, autoTags: string[]): string {
+  if (customTags?.trim()) return customTags.split(",").map((t) => `#${t.trim()}`).filter((t) => t !== "#").join(" ");
+  return autoTags.map((t) => `#${t}`).join(" ");
+}
+
+function buildBearContent(body: string, hashtags: string, tagPosition: "prepend" | "append"): string {
+  return tagPosition === "prepend" ? `${hashtags}\n\n${body}` : `${body}\n\n${hashtags}`;
+}
+
+async function saveToBear(config: BearConfig): Promise<IntegrationResult> {
+  try {
+    const { plan, customTags, tagPosition = "append" } = config;
+    const title = extractTitle(plan);
+    const body = stripH1(plan);
+    const tags = customTags?.trim() ? undefined : await extractTags(plan);
+    const hashtags = buildHashtags(customTags, tags ?? []);
+    const content = buildBearContent(body, hashtags, tagPosition);
+    const url = `bear://x-callback-url/create?title=${encodeURIComponent(title)}&text=${encodeURIComponent(content)}&open_note=no`;
+    spawn("open", [url], { stdio: "ignore" });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+function generateOctarineFrontmatter(tags: string[]): string {
+  const now = new Date().toISOString().slice(0, 16);
+  const tagLines = tags.map((t) => `  - ${t.toLowerCase()}`).join("\n");
+  return `---\ntags:\n${tagLines}\nStatus: Draft\nAuthor: plannotator\nLast Edited: ${now}\n---`;
+}
+
+async function saveToOctarine(config: OctarineConfig): Promise<IntegrationResult> {
+  try {
+    const { plan } = config;
+    const workspace = config.workspace.trim();
+    if (!workspace) return { success: false, error: "Workspace is required" };
+    const folder = config.folder.trim() || "plannotator";
+    const filename = generateFilename(plan);
+    const base = filename.replace(/\.md$/, "");
+    const path = folder ? `${folder}/${base}` : base;
+    const tags = await extractTags(plan);
+    const frontmatter = generateOctarineFrontmatter(tags);
+    const content = `${frontmatter}\n\n${plan}`;
+    const url = `octarine://create?path=${encodeURIComponent(path)}&content=${encodeURIComponent(content)}&workspace=${encodeURIComponent(workspace)}&fresh=true&openAfter=false`;
+    spawn("open", [url], { stdio: "ignore" });
+    return { success: true, path };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // ── PR Runtime (Node.js) ────────────────────────────────────────────────
 
 const prRuntime: PRRuntime = {
@@ -1010,21 +1190,102 @@ export async function startPlanReviewServer(options: {
       json(res, { agents: [] });
     } else if (url.pathname === "/favicon.svg") {
       handleFavicon(res);
+    } else if (url.pathname === "/api/save-notes" && req.method === "POST") {
+      const results: { obsidian?: IntegrationResult; bear?: IntegrationResult; octarine?: IntegrationResult } = {};
+      try {
+        const body = await parseBody(req);
+        const promises: Promise<void>[] = [];
+        const obsConfig = body.obsidian as ObsidianConfig | undefined;
+        const bearConfig = body.bear as BearConfig | undefined;
+        const octConfig = body.octarine as OctarineConfig | undefined;
+        if (obsConfig?.vaultPath && obsConfig?.plan) {
+          promises.push(saveToObsidian(obsConfig).then((r) => { results.obsidian = r; }));
+        }
+        if (bearConfig?.plan) {
+          promises.push(saveToBear(bearConfig).then((r) => { results.bear = r; }));
+        }
+        if (octConfig?.plan && octConfig?.workspace) {
+          promises.push(saveToOctarine(octConfig).then((r) => { results.octarine = r; }));
+        }
+        await Promise.allSettled(promises);
+        for (const [name, result] of Object.entries(results)) {
+          if (!result?.success && result) console.error(`[${name}] Save failed: ${result.error}`);
+        }
+      } catch (err) {
+        console.error(`[Save Notes] Error:`, err);
+        json(res, { error: "Save failed" }, 500);
+        return;
+      }
+      json(res, { ok: true, results });
     } else if (url.pathname === "/api/approve" && req.method === "POST") {
-      const body = await parseBody(req);
+      let feedback: string | undefined;
+      let agentSwitch: string | undefined;
+      let requestedPermissionMode: string | undefined;
+      let planSaveEnabled = true;
+      let planSaveCustomPath: string | undefined;
+      try {
+        const body = await parseBody(req);
+        if (body.feedback) feedback = body.feedback as string;
+        if (body.agentSwitch) agentSwitch = body.agentSwitch as string;
+        if (body.permissionMode) requestedPermissionMode = body.permissionMode as string;
+        if (body.planSave !== undefined) {
+          const ps = body.planSave as { enabled: boolean; customPath?: string };
+          planSaveEnabled = ps.enabled;
+          planSaveCustomPath = ps.customPath;
+        }
+        // Run note integrations in parallel
+        const integrationResults: Record<string, IntegrationResult> = {};
+        const integrationPromises: Promise<void>[] = [];
+        const obsConfig = body.obsidian as ObsidianConfig | undefined;
+        const bearConfig = body.bear as BearConfig | undefined;
+        const octConfig = body.octarine as OctarineConfig | undefined;
+        if (obsConfig?.vaultPath && obsConfig?.plan) {
+          integrationPromises.push(saveToObsidian(obsConfig).then((r) => { integrationResults.obsidian = r; }));
+        }
+        if (bearConfig?.plan) {
+          integrationPromises.push(saveToBear(bearConfig).then((r) => { integrationResults.bear = r; }));
+        }
+        if (octConfig?.plan && octConfig?.workspace) {
+          integrationPromises.push(saveToOctarine(octConfig).then((r) => { integrationResults.octarine = r; }));
+        }
+        await Promise.allSettled(integrationPromises);
+        for (const [name, result] of Object.entries(integrationResults)) {
+          if (!result?.success && result) console.error(`[${name}] Save failed: ${result.error}`);
+        }
+      } catch (err) {
+        console.error(`[Integration] Error:`, err);
+      }
+      // Save annotations and final snapshot
+      let savedPath: string | undefined;
+      if (planSaveEnabled) {
+        const annotations = feedback || "";
+        if (annotations) saveAnnotations(slug, annotations, planSaveCustomPath);
+        savedPath = saveFinalSnapshot(slug, "approved", options.plan, annotations, planSaveCustomPath);
+      }
       deleteDraft(draftKey);
-      resolveDecision({
-        approved: true,
-        feedback: body.feedback as string | undefined,
-        agentSwitch: body.agentSwitch as string | undefined,
-        permissionMode: body.permissionMode as string | undefined,
-      });
-      json(res, { ok: true });
+      resolveDecision({ approved: true, feedback, agentSwitch, permissionMode: requestedPermissionMode });
+      json(res, { ok: true, savedPath });
     } else if (url.pathname === "/api/deny" && req.method === "POST") {
-      const body = await parseBody(req);
+      let feedback = "Plan rejected by user";
+      let planSaveEnabled = true;
+      let planSaveCustomPath: string | undefined;
+      try {
+        const body = await parseBody(req);
+        feedback = (body.feedback as string) || feedback;
+        if (body.planSave !== undefined) {
+          const ps = body.planSave as { enabled: boolean; customPath?: string };
+          planSaveEnabled = ps.enabled;
+          planSaveCustomPath = ps.customPath;
+        }
+      } catch { /* use default feedback */ }
+      let savedPath: string | undefined;
+      if (planSaveEnabled) {
+        saveAnnotations(slug, feedback, planSaveCustomPath);
+        savedPath = saveFinalSnapshot(slug, "denied", options.plan, feedback, planSaveCustomPath);
+      }
       deleteDraft(draftKey);
-      resolveDecision({ approved: false, feedback: (body.feedback as string) || "Plan rejected" });
-      json(res, { ok: true });
+      resolveDecision({ approved: false, feedback });
+      json(res, { ok: true, savedPath });
     } else {
       html(res, options.htmlContent);
     }
