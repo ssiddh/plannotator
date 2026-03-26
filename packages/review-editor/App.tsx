@@ -12,6 +12,7 @@ import { RepoIcon } from '@plannotator/ui/components/RepoIcon';
 import { PullRequestIcon } from '@plannotator/ui/components/PullRequestIcon';
 import { getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo } from '@plannotator/shared/pr-provider';
 import { getIdentity } from '@plannotator/ui/utils/identity';
+import { configStore } from '@plannotator/ui/config';
 import { getAgentSwitchSettings, getEffectiveAgentName } from '@plannotator/ui/utils/agentSwitch';
 import { getAIProviderSettings, saveAIProviderSettings, getPreferredModel } from '@plannotator/ui/utils/aiProvider';
 import { AISetupDialog } from '@plannotator/ui/components/AISetupDialog';
@@ -100,6 +101,7 @@ const ReviewApp: React.FC = () => {
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(new Set());
   const [hideViewedFiles, setHideViewedFiles] = useState(false);
   const [origin, setOrigin] = useState<'opencode' | 'claude-code' | 'pi' | null>(null);
+  const [gitUser, setGitUser] = useState<string | undefined>();
   const [isWSL, setIsWSL] = useState(false);
   const [diffType, setDiffType] = useState<string>('uncommitted');
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
@@ -138,7 +140,7 @@ const ReviewApp: React.FC = () => {
   const mrNumberLabel = prMetadata ? getMRNumberLabel(prMetadata) : '';
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : '';
 
-  const identity = useMemo(() => getIdentity(), []);
+  const [identity, setIdentity] = useState(() => getIdentity());
 
   const clearPendingSelection = useCallback(() => {
     setPendingSelection(null);
@@ -390,7 +392,13 @@ const ReviewApp: React.FC = () => {
         viewedFiles?: string[];
         error?: string;
         isWSL?: boolean;
+        serverConfig?: { displayName?: string; gitUser?: string };
       }) => {
+        // Initialize config store with server-provided values (config file > cookie > default)
+        configStore.init(data.serverConfig);
+        setIdentity(getIdentity());
+        // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
+        setGitUser(data.serverConfig?.gitUser);
         const apiFiles = parseDiffToFiles(data.rawPatch);
         setDiffData({
           files: apiFiles,
@@ -520,6 +528,7 @@ const ReviewApp: React.FC = () => {
 
   // Handle identity change - update author on existing annotations
   const handleIdentityChange = useCallback((oldIdentity: string, newIdentity: string) => {
+    setIdentity(newIdentity);
     setAnnotations(prev => prev.map(ann =>
       ann.author === oldIdentity ? { ...ann, author: newIdentity } : ann
     ));
@@ -1273,6 +1282,7 @@ const ReviewApp: React.FC = () => {
               origin={origin}
               mode="review"
               aiProviders={aiProviders}
+              gitUser={gitUser}
             />
 
             {/* Panel toggle */}
