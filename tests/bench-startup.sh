@@ -13,7 +13,7 @@
 set -euo pipefail
 
 RUNS=${1:-3}
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="$PROJECT_DIR/opencode.json"
 LOG_DIR="$HOME/.local/share/opencode/log"
 CACHE_DIR="$HOME/.cache/opencode"
@@ -135,6 +135,10 @@ echo ""
 # ── Scenario 3: Local optimized plugin ───────────────────────────────
 
 echo "━━━ Scenario 3: Local optimized plugin (file://) ━━━"
+if [[ ! -f "$PROJECT_DIR/apps/opencode-plugin/dist/index.js" ]]; then
+  echo "  Building local plugin (dist/index.js not found)..."
+  (cd "$PROJECT_DIR" && bun run build:opencode)
+fi
 write_config "[\"$LOCAL_PLUGIN\"]"
 clear_plugin_cache
 
