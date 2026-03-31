@@ -323,7 +323,9 @@ export async function handleRequest(
     }
 
     // Require authentication
-    const token = extractToken(request);
+    // Accept token from query param (for EventSource) or Authorization header
+    const tokenFromQuery = url.searchParams.get("token");
+    const token = extractToken(request) || tokenFromQuery;
     if (!token) {
       return Response.json(
         { error: "Authentication required" },
