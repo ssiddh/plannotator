@@ -46,3 +46,9 @@ opencode.json
 plannotator-local
 # Local research/reference docs (not for repo)
 /reference/
+
+# Paste service local config (contains secrets)
+apps/paste-service/.dev.vars
+
+# Claude Code session memory
+.remember/
