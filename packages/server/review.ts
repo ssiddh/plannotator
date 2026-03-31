@@ -17,6 +17,7 @@ import { handleImage, handleUpload, handleAgents, handleServerReady, handleDraft
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { createExternalAnnotationHandler } from "./external-annotations";
+import { createAgentJobHandler } from "./agent-jobs";
 import { saveConfig, detectGitUser, getServerConfig } from "./config";
 import { type PRMetadata, type PRReviewFileComment, fetchPRFileContent, fetchPRContext, submitPRReview, fetchPRViewedFiles, markPRFilesViewed, getPRUser, prRefFromMetadata, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
 import { createAIEndpoints, ProviderRegistry, SessionManager, createProvider, type AIEndpoints, type PiSDKConfig } from "@plannotator/ai";
@@ -104,6 +105,20 @@ export async function startReviewServer(
   let currentGitRef = options.gitRef;
   let currentDiffType: DiffType = options.diffType || "uncommitted";
   let currentError = options.error;
+
+  // Agent jobs — background process manager (late-binds serverUrl via getter)
+  let serverUrl = "";
+  const agentJobs = createAgentJobHandler({
+    mode: "review",
+    getServerUrl: () => serverUrl,
+    getCwd: () => {
+      if (currentDiffType.startsWith("worktree:")) {
+        const parsed = parseWorktreeDiffType(currentDiffType);
+        if (parsed) return parsed.path;
+      }
+      return gitContext?.cwd ?? process.cwd();
+    },
+  });
 
   // AI provider setup (graceful — AI features degrade if SDK unavailable)
   const aiRegistry = new ProviderRegistry();
@@ -448,6 +463,12 @@ export async function startReviewServer(
           });
           if (externalResponse) return externalResponse;
 
+          // API: Agent jobs (background review agents)
+          const agentResponse = await agentJobs.handle(req, url, {
+            disableIdleTimeout: () => server.timeout(req, 0),
+          });
+          if (agentResponse) return agentResponse;
+
           // API: Submit review feedback
           if (url.pathname === "/api/feedback" && req.method === "POST") {
             try {
@@ -570,7 +591,9 @@ export async function startReviewServer(
   }
 
   const port = server.port!;
-  const serverUrl = `http://localhost:${port}`;
+  serverUrl = `http://localhost:${port}`;
+  const exitHandler = () => agentJobs.killAll();
+  process.once("exit", exitHandler);
 
   // Notify caller that server is ready
   if (onReady) {
@@ -583,6 +606,8 @@ export async function startReviewServer(
     isRemote,
     waitForDecision: () => decisionPromise,
     stop: () => {
+      process.removeListener("exit", exitHandler);
+      agentJobs.killAll();
       aiSessionManager.disposeAll();
       aiRegistry.disposeAll();
       server.stop();
