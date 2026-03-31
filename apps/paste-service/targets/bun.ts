@@ -14,13 +14,20 @@ const allowedOrigins = getAllowedOrigins(process.env.PASTE_ALLOWED_ORIGINS);
 
 const store = new FsPasteStore(dataDir);
 
+const authConfig = {
+  githubClientId: process.env.GITHUB_CLIENT_ID,
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
+  oauthRedirectUri: process.env.OAUTH_REDIRECT_URI || `http://localhost:${port}/api/auth/github/callback`,
+  portalUrl: process.env.PORTAL_URL || "http://localhost:3001",
+};
+
 Bun.serve({
   port,
   async fetch(request) {
     const origin = request.headers.get("Origin") ?? "";
     const cors = corsHeaders(origin, allowedOrigins);
-    // Pass undefined for KV (no token caching in filesystem mode)
-    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined);
+    // Pass undefined for KV (no token caching in filesystem mode) and auth config
+    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined, authConfig);
   },
 });
 

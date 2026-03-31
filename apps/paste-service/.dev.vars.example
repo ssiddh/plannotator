@@ -1,0 +1,16 @@
+# Local development environment variables for paste service
+# Copy this file to .dev.vars and fill in your values
+
+# GitHub OAuth App credentials
+# Create at: https://github.com/settings/developers
+GITHUB_CLIENT_ID=Iv1.your_client_id_here
+GITHUB_CLIENT_SECRET=your_client_secret_here
+
+# OAuth callback URL (for local development)
+OAUTH_REDIRECT_URI=http://localhost:19433/api/auth/github/callback
+
+# Portal URL (where to redirect after OAuth)
+PORTAL_URL=http://localhost:3001
+
+# CORS allowed origins
+ALLOWED_ORIGINS=http://localhost:3001,http://localhost:5173

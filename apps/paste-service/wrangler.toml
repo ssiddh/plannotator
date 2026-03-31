@@ -10,3 +10,11 @@ preview_id = "6efae5ac33c4443ba8f0a0b83a2eb111"
 
 [vars]
 ALLOWED_ORIGINS = "https://share.plannotator.ai,http://localhost:3001"
+PORTAL_URL = "https://share.plannotator.ai"
+
+# GitHub OAuth Configuration
+# GITHUB_CLIENT_ID = "Iv1.your_client_id_here"
+# OAUTH_REDIRECT_URI = "https://plannotator-paste.plannotator.workers.dev/api/auth/github/callback"
+
+# Secrets (set via: wrangler secret put GITHUB_CLIENT_SECRET)
+# GITHUB_CLIENT_SECRET = "<set-via-wrangler-secret>"

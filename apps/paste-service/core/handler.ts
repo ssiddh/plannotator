@@ -2,6 +2,12 @@ import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
 import type { PasteACL, PasteMetadata } from "../auth/types";
 import { extractToken, validateGitHubToken, checkAccess } from "../auth/middleware";
+import {
+  handleLogin,
+  handleCallback,
+  handleTokenValidate,
+  handleTokenRefresh,
+} from "../auth/github";
 
 export interface PasteOptions {
   maxSize: number;
@@ -113,6 +119,13 @@ export class PasteError extends Error {
   }
 }
 
+export interface AuthConfig {
+  githubClientId?: string;
+  githubClientSecret?: string;
+  oauthRedirectUri?: string;
+  portalUrl?: string;
+}
+
 /**
  * Shared HTTP request handler for the paste service.
  * Both Bun and Cloudflare targets delegate to this after wiring up their store.
@@ -122,13 +135,71 @@ export async function handleRequest(
   store: PasteStore,
   cors: Record<string, string>,
   options?: Partial<PasteOptions>,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  authConfig?: AuthConfig
 ): Promise<Response> {
   const url = new URL(request.url);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: cors });
   }
+
+  // --- OAuth Routes ---
+
+  if (url.pathname === "/api/auth/github/login" && request.method === "GET") {
+    if (!authConfig?.githubClientId || !authConfig?.oauthRedirectUri) {
+      return Response.json(
+        { error: "OAuth not configured" },
+        { status: 503, headers: cors }
+      );
+    }
+    return handleLogin(
+      request,
+      authConfig.githubClientId,
+      authConfig.oauthRedirectUri
+    );
+  }
+
+  if (url.pathname === "/api/auth/github/callback" && request.method === "GET") {
+    if (
+      !authConfig?.githubClientId ||
+      !authConfig?.githubClientSecret ||
+      !authConfig?.oauthRedirectUri ||
+      !authConfig?.portalUrl
+    ) {
+      return Response.json(
+        { error: "OAuth not configured" },
+        { status: 503, headers: cors }
+      );
+    }
+    return handleCallback(
+      request,
+      authConfig.githubClientId,
+      authConfig.githubClientSecret,
+      authConfig.oauthRedirectUri,
+      authConfig.portalUrl
+    );
+  }
+
+  if (url.pathname === "/api/auth/token/validate" && request.method === "POST") {
+    return handleTokenValidate(request);
+  }
+
+  if (url.pathname === "/api/auth/token/refresh" && request.method === "POST") {
+    if (!authConfig?.githubClientId || !authConfig?.githubClientSecret) {
+      return Response.json(
+        { error: "OAuth not configured" },
+        { status: 503, headers: cors }
+      );
+    }
+    return handleTokenRefresh(
+      request,
+      authConfig.githubClientId,
+      authConfig.githubClientSecret
+    );
+  }
+
+  // --- Paste Routes ---
 
   if (url.pathname === "/api/paste" && request.method === "POST") {
     let body: { data?: unknown; acl?: PasteACL };
