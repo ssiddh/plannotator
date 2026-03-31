@@ -32,6 +32,10 @@ interface ExportModalProps {
   markdown?: string;
   isApiMode?: boolean;
   initialTab?: Tab;
+  /** GitHub token for authenticated sharing */
+  githubToken?: string | null;
+  /** Paste service URL for creating authenticated shares */
+  pasteApiUrl?: string;
 }
 
 type Tab = 'share' | 'annotations' | 'notes';
@@ -55,12 +59,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   markdown,
   isApiMode = false,
   initialTab,
+  githubToken,
+  pasteApiUrl = 'http://localhost:19433',
 }) => {
   const defaultTab = initialTab || (sharingEnabled ? 'share' : 'annotations');
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [copied, setCopied] = useState<'short' | 'full' | 'annotations' | false>(false);
   const [saveStatus, setSaveStatus] = useState<Record<SaveTarget, SaveStatus>>({ obsidian: 'idle', bear: 'idle', octarine: 'idle' });
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
+
+  // ACL controls
+  const [requireAuth, setRequireAuth] = useState(false);
+  const [aclUsers, setAclUsers] = useState('');
+  const [aclTeams, setAclTeams] = useState('');
+  const [exportToPR, setExportToPR] = useState(false);
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null);
+  const [createdShareId, setCreatedShareId] = useState<string | null>(null);
+  const [createShareError, setCreateShareError] = useState<string | null>(null);
 
   // Reset tab when modal opens
   useEffect(() => {
@@ -69,11 +85,19 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
   }, [isOpen, initialTab, sharingEnabled]);
 
-  // Reset save status when modal opens
+  // Reset save status and ACL state when modal opens
   useEffect(() => {
     if (isOpen) {
       setSaveStatus({ obsidian: 'idle', bear: 'idle', octarine: 'idle' });
       setSaveErrors({});
+      setRequireAuth(false);
+      setAclUsers('');
+      setAclTeams('');
+      setExportToPR(false);
+      setIsCreatingShare(false);
+      setCreatedPrUrl(null);
+      setCreatedShareId(null);
+      setCreateShareError(null);
     }
   }, [isOpen]);
 
@@ -174,6 +198,63 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   const readyCount = [isObsidianReady, isBearReady, isOctarineReady].filter(Boolean).length;
 
+  // Create authenticated share with ACL and optional PR export
+  const handleCreateAuthenticatedShare = async () => {
+    if (!markdown || !githubToken) return;
+
+    setIsCreatingShare(true);
+    setCreatedPrUrl(null);
+    setCreatedShareId(null);
+    setCreateShareError(null);
+
+    try {
+      // Encode plan as base64
+      const encoder = new TextEncoder();
+      const data = encoder.encode(markdown);
+      const base64Data = btoa(String.fromCharCode(...data));
+
+      // Build ACL
+      const users = aclUsers.split(',').map(u => u.trim()).filter(Boolean);
+      const teams = aclTeams.split(',').map(t => t.trim()).filter(Boolean);
+
+      const body: any = {
+        data: base64Data,
+        acl: requireAuth
+          ? { type: 'whitelist', users, teams }
+          : { type: 'public' },
+      };
+
+      if (exportToPR) {
+        body.github_export = true;
+        body.plan_markdown = markdown;
+      }
+
+      const res = await fetch(`${pasteApiUrl}/api/paste`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${githubToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        setCreatedShareId(result.id);
+        if (result.github_pr?.pr_url) {
+          setCreatedPrUrl(result.github_pr.pr_url);
+        }
+      } else {
+        const errorText = await res.text();
+        setCreateShareError(errorText || 'Failed to create share');
+      }
+    } catch (error) {
+      setCreateShareError(error instanceof Error ? error.message : 'Network error');
+    } finally {
+      setIsCreatingShare(false);
+    }
+  };
+
   // Determine which tabs to show
   const showTabs = sharingEnabled || showNotesTab;
 
@@ -250,6 +331,158 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           {/* Tab content */}
           {activeTab === 'share' && sharingEnabled ? (
             <div className="space-y-4">
+              {/* Authenticated Share Options */}
+              {githubToken && (
+                <div className="border border-border rounded-lg p-3 space-y-3">
+                  <h4 className="text-xs font-semibold text-foreground">Authenticated Sharing</h4>
+
+                  {/* Require Auth Checkbox */}
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requireAuth}
+                      onChange={(e) => {
+                        setRequireAuth(e.target.checked);
+                        if (!e.target.checked) {
+                          setExportToPR(false);
+                        }
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded border-border"
+                    />
+                    <div>
+                      <span className="text-xs font-medium">Require authentication</span>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Restrict access to specific GitHub users or teams
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* ACL Inputs */}
+                  {requireAuth && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          GitHub Usernames (comma-separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={aclUsers}
+                          onChange={(e) => setAclUsers(e.target.value)}
+                          placeholder="alice, bob, charlie"
+                          className="w-full bg-muted rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          GitHub Teams (org/team format)
+                        </label>
+                        <input
+                          type="text"
+                          value={aclTeams}
+                          onChange={(e) => setAclTeams(e.target.value)}
+                          placeholder="myorg/reviewers, myorg/team"
+                          className="w-full bg-muted rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* PR Export Checkbox */}
+                  <label className={`flex items-start gap-2 ${requireAuth ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={exportToPR}
+                      onChange={(e) => setExportToPR(e.target.checked)}
+                      disabled={!requireAuth}
+                      className="mt-0.5 w-4 h-4 rounded border-border disabled:cursor-not-allowed"
+                    />
+                    <div>
+                      <span className="text-xs font-medium">Export to GitHub PR</span>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Create a pull request for collaborative review with comment sync
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Create Share Button */}
+                  <button
+                    onClick={handleCreateAuthenticatedShare}
+                    disabled={isCreatingShare || (!requireAuth && !exportToPR)}
+                    className="w-full px-3 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingShare ? 'Creating Share...' : 'Create Authenticated Share'}
+                  </button>
+
+                  {/* Show error if creation failed */}
+                  {createShareError && (
+                    <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+                      <p className="text-xs text-destructive">❌ {createShareError}</p>
+                    </div>
+                  )}
+
+                  {/* Show created share URL */}
+                  {createdShareId && (
+                    <div className="p-2 bg-success/10 border border-success/20 rounded-md space-y-2">
+                      <p className="text-xs text-success-foreground font-medium">✅ Share created successfully!</p>
+                      <div>
+                        <label className="block text-[10px] text-muted-foreground mb-1">Share URL:</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            readOnly
+                            value={`${window.location.origin}/p/${createdShareId}`}
+                            className="flex-1 bg-muted rounded px-2 py-1 text-xs font-mono"
+                            onClick={e => (e.target as HTMLInputElement).select()}
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/p/${createdShareId}`);
+                              setCopied('short');
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className="px-2 py-1 rounded text-xs bg-background border border-border hover:bg-muted transition-colors"
+                          >
+                            {copied === 'short' ? '✓' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show PR URL if created */}
+                  {createdPrUrl && (
+                    <div className="p-2 bg-success/10 border border-success/20 rounded-md">
+                      <p className="text-xs text-success-foreground font-medium mb-1">✅ PR created!</p>
+                      <a
+                        href={createdPrUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline break-all"
+                      >
+                        {createdPrUrl}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sign in prompt if not authenticated */}
+              {!githubToken && (
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Sign in with GitHub to create private shares with access control and PR integration.
+                  </p>
+                  <a
+                    href={`${pasteApiUrl}/api/auth/github/login`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                    Sign in with GitHub
+                  </a>
+                </div>
+              )}
               {/* Short URL — primary copy target when available */}
               {shortShareUrl ? (
                 <div>

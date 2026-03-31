@@ -1779,6 +1779,8 @@ const App: React.FC = () => {
           markdown={markdown}
           isApiMode={isApiMode}
           initialTab={initialExportTab}
+          githubToken={githubToken}
+          pasteApiUrl={pasteApiUrl}
         />
 
         {/* Import Modal */}
