@@ -27,3 +27,10 @@ export interface AuthResult {
   user?: GitHubUser;
   error?: string;
 }
+
+export interface PRMetadata {
+  repo: string;           // "owner/repo" format
+  pr_number: number;
+  pr_url: string;
+  created_at: string;
+}

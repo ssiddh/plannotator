@@ -46,7 +46,7 @@ export function handleLogin(
   redirectUri: string
 ): Response {
   const state = generateState();
-  const scope = "read:user read:org"; // Need read:org for team membership
+  const scope = "repo read:user read:org"; // repo: create PRs, read:org: team membership
 
   const authUrl = new URL(GITHUB_OAUTH_AUTHORIZE);
   authUrl.searchParams.set("client_id", clientId);
@@ -57,9 +57,13 @@ export function handleLogin(
   // Store state in cookie for verification in callback
   const headers = new Headers();
   headers.set("Location", authUrl.toString());
+
+  // Only use Secure flag on HTTPS (not localhost)
+  const isSecure = redirectUri.startsWith("https://");
+  const secureSetting = isSecure ? "Secure; " : "";
   headers.set(
     "Set-Cookie",
-    `oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`
+    `oauth_state=${state}; Path=/; HttpOnly; ${secureSetting}SameSite=Lax; Max-Age=600`
   );
 
   return new Response(null, { status: 302, headers });
@@ -97,9 +101,14 @@ export async function handleCallback(
   }
 
   // Verify state (CSRF protection)
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  const cookieHeader = request.headers.get("Cookie") || "";
+  console.log("Callback cookies:", cookieHeader);
+  const cookies = parseCookies(cookieHeader);
   const savedState = cookies.oauth_state;
+  console.log("Saved state:", savedState, "Request state:", state);
+
   if (!savedState || savedState !== state) {
+    console.log("State mismatch - redirecting with error");
     return redirectToPortal(
       portalUrl,
       "error=invalid_state"
@@ -107,6 +116,7 @@ export async function handleCallback(
   }
 
   // Exchange code for access token
+  console.log("Exchanging code for token...");
   try {
     const tokenResponse = await fetch(GITHUB_OAUTH_TOKEN, {
       method: "POST",
@@ -166,7 +176,9 @@ export async function handleCallback(
       avatar: user.avatar_url,
     };
     const fragment = btoa(JSON.stringify(fragmentData));
-    headers.set("Location", `${portalUrl}#auth=${fragment}`);
+    const redirectUrl = `${portalUrl}#auth=${fragment}`;
+    console.log("OAuth success! Redirecting to:", redirectUrl);
+    headers.set("Location", redirectUrl);
 
     // Store refresh token in httpOnly cookie if provided
     if (tokenData.refresh_token) {
@@ -185,6 +197,7 @@ export async function handleCallback(
 
     return new Response(null, { status: 302, headers });
   } catch (error) {
+    console.error("OAuth callback error:", error);
     return redirectToPortal(
       portalUrl,
       `error=exception&message=${encodeURIComponent(String(error))}`

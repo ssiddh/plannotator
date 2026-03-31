@@ -1,6 +1,6 @@
 import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
-import type { PasteACL, PasteMetadata } from "../auth/types";
+import type { PasteACL, PasteMetadata, PRMetadata } from "../auth/types";
 import { extractToken, validateGitHubToken, checkAccess } from "../auth/middleware";
 import {
   handleLogin,
@@ -8,6 +8,7 @@ import {
   handleTokenValidate,
   handleTokenRefresh,
 } from "../auth/github";
+import { exportToPR, fetchPRComments } from "../github/pr";
 
 export interface PasteOptions {
   maxSize: number;
@@ -20,6 +21,7 @@ const DEFAULT_OPTIONS: PasteOptions = {
 };
 
 const ID_PATTERN = /^\/api\/paste\/([A-Za-z0-9]{6,16})$/;
+const PR_COMMENTS_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/comments$/;
 
 /**
  * Generate a short URL-safe ID (8 chars, ~47.6 bits of entropy).
@@ -199,12 +201,118 @@ export async function handleRequest(
     );
   }
 
+  // --- GitHub PR Routes ---
+
+  if (url.pathname === "/api/pr/create" && request.method === "POST") {
+    let body: { pasteId?: string; planMarkdown?: string; defaultRepo?: string };
+    try {
+      body = (await request.json()) as { pasteId?: string; planMarkdown?: string; defaultRepo?: string };
+    } catch {
+      return Response.json(
+        { error: "Invalid JSON body" },
+        { status: 400, headers: cors }
+      );
+    }
+
+    if (!body.pasteId || !body.planMarkdown) {
+      return Response.json(
+        { error: "Missing pasteId or planMarkdown" },
+        { status: 400, headers: cors }
+      );
+    }
+
+    // Extract and validate token
+    const token = extractToken(request);
+    if (!token) {
+      return Response.json(
+        { error: "Authentication required to create PR" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    try {
+      const prMetadata = await exportToPR(
+        body.pasteId,
+        body.planMarkdown,
+        token,
+        body.defaultRepo || process.env.GITHUB_DEFAULT_REPO
+      );
+
+      // Store PR metadata (KV or filesystem)
+      if (kv) {
+        await kv.put(
+          `pr:${body.pasteId}`,
+          JSON.stringify(prMetadata),
+          { expirationTtl: 30 * 24 * 60 * 60 } // 30 days
+        );
+      } else if ('putPRMetadata' in store) {
+        await (store as any).putPRMetadata(body.pasteId, prMetadata);
+      }
+
+      return Response.json(prMetadata, { status: 201, headers: cors });
+    } catch (e) {
+      console.error("PR export failed:", e);
+      return Response.json(
+        { error: e instanceof Error ? e.message : "Failed to create PR" },
+        { status: 500, headers: cors }
+      );
+    }
+  }
+
+  const prCommentsMatch = url.pathname.match(PR_COMMENTS_PATTERN);
+  if (prCommentsMatch && request.method === "GET") {
+    const pasteId = prCommentsMatch[1];
+
+    // Extract and validate token
+    const token = extractToken(request);
+    if (!token) {
+      return Response.json(
+        { error: "Authentication required to fetch PR comments" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    // Load PR metadata (KV or filesystem)
+    let prMetadata: PRMetadata | null = null;
+
+    if (kv) {
+      const prMetadataJson = await kv.get(`pr:${pasteId}`);
+      if (prMetadataJson) {
+        try {
+          prMetadata = JSON.parse(prMetadataJson);
+        } catch (e) {
+          console.error("Failed to parse PR metadata from KV:", e);
+        }
+      }
+    } else if ('getPRMetadata' in store) {
+      prMetadata = await (store as any).getPRMetadata(pasteId);
+    }
+
+    if (!prMetadata) {
+      return Response.json(
+        { error: "No PR found for this paste" },
+        { status: 404, headers: cors }
+      );
+    }
+
+    try {
+      const comments = await fetchPRComments(prMetadata, token);
+      return Response.json(comments, { headers: cors });
+    } catch (e) {
+      console.error("Failed to fetch PR comments:", e);
+      return Response.json(
+        { error: e instanceof Error ? e.message : "Failed to fetch PR comments" },
+        { status: 500, headers: cors }
+      );
+    }
+  }
+
   // --- Paste Routes ---
 
   if (url.pathname === "/api/paste" && request.method === "POST") {
-    let body: { data?: unknown; acl?: PasteACL };
+    let body: { data?: unknown; acl?: PasteACL; github_export?: boolean; plan_markdown?: string };
     try {
-      body = (await request.json()) as { data?: unknown; acl?: PasteACL };
+      body = (await request.json()) as { data?: unknown; acl?: PasteACL; github_export?: boolean; plan_markdown?: string };
     } catch {
       return Response.json(
         { error: "Invalid JSON body" },
@@ -213,15 +321,15 @@ export async function handleRequest(
     }
 
     try {
-      // Extract token and validate if ACL requires auth
+      // Extract token and validate if ACL requires auth or PR export requested
       const token = extractToken(request);
       let createdBy: string | undefined;
 
-      if (body.acl && body.acl.type === "whitelist") {
-        // Whitelist requires authentication
+      if ((body.acl && body.acl.type === "whitelist") || body.github_export) {
+        // Whitelist or PR export requires authentication
         if (!token) {
           return Response.json(
-            { error: "Authentication required for private shares" },
+            { error: "Authentication required for private shares or PR export" },
             { status: 401, headers: cors }
           );
         }
@@ -244,7 +352,47 @@ export async function handleRequest(
         store,
         options
       );
-      return Response.json(result, { status: 201, headers: cors });
+
+      // If GitHub PR export requested, create PR
+      let prMetadata: PRMetadata | undefined;
+      if (body.github_export && token && body.plan_markdown) {
+        try {
+          prMetadata = await exportToPR(
+            result.id,
+            body.plan_markdown,
+            token,
+            process.env.GITHUB_DEFAULT_REPO
+          );
+
+          // Store PR metadata (KV or filesystem)
+          if (kv) {
+            await kv.put(
+              `pr:${result.id}`,
+              JSON.stringify(prMetadata),
+              { expirationTtl: 30 * 24 * 60 * 60 } // 30 days
+            );
+          } else if ('putPRMetadata' in store) {
+            await (store as any).putPRMetadata(result.id, prMetadata);
+          }
+        } catch (e) {
+          console.error("PR export failed:", e);
+          // Don't fail the paste creation if PR export fails
+          // Return the paste ID but indicate PR creation failed
+          return Response.json(
+            {
+              ...result,
+              github_pr: null,
+              pr_error: e instanceof Error ? e.message : "Failed to create PR",
+            },
+            { status: 201, headers: cors }
+          );
+        }
+      }
+
+      return Response.json(
+        { ...result, github_pr: prMetadata },
+        { status: 201, headers: cors }
+      );
     } catch (e) {
       if (e instanceof PasteError) {
         return Response.json(
@@ -261,7 +409,8 @@ export async function handleRequest(
 
   const match = url.pathname.match(ID_PATTERN);
   if (match && request.method === "GET") {
-    const metadata = await store.getMetadata(match[1]);
+    const pasteId = match[1];
+    const metadata = await store.getMetadata(pasteId);
     if (!metadata) {
       return Response.json(
         { error: "Paste not found or expired" },
@@ -286,9 +435,27 @@ export async function handleRequest(
       );
     }
 
-    // Return only the encrypted data (not the full metadata)
+    // Check if PR metadata exists (KV or filesystem)
+    let prMetadata: PRMetadata | undefined;
+    if (kv) {
+      const prMetadataJson = await kv.get(`pr:${pasteId}`);
+      if (prMetadataJson) {
+        try {
+          prMetadata = JSON.parse(prMetadataJson);
+        } catch (e) {
+          console.error("Failed to parse PR metadata:", e);
+        }
+      }
+    } else if ('getPRMetadata' in store) {
+      const fsMetadata = await (store as any).getPRMetadata(pasteId);
+      if (fsMetadata) {
+        prMetadata = fsMetadata;
+      }
+    }
+
+    // Return the encrypted data with optional PR metadata
     return Response.json(
-      { data: metadata.data },
+      { data: metadata.data, github_pr: prMetadata },
       {
         headers: {
           ...cors,

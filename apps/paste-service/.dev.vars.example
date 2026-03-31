@@ -14,3 +14,9 @@ PORTAL_URL=http://localhost:3001
 
 # CORS allowed origins
 ALLOWED_ORIGINS=http://localhost:3001,http://localhost:5173
+
+# GitHub PR integration (optional)
+# Default repository for PR export
+GITHUB_DEFAULT_REPO=owner/repo
+# Base branch for PRs (default: main)
+GITHUB_PR_BASE_BRANCH=main
