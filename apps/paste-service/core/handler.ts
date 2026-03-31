@@ -9,6 +9,7 @@ import {
   handleTokenRefresh,
 } from "../auth/github";
 import { exportToPR, fetchPRComments } from "../github/pr";
+import { handlePresenceStream, handleHeartbeat } from "../presence/handler";
 
 export interface PasteOptions {
   maxSize: number;
@@ -305,6 +306,90 @@ export async function handleRequest(
         { status: 500, headers: cors }
       );
     }
+  }
+
+  // --- Presence Routes ---
+
+  if (url.pathname.startsWith("/api/presence/") && url.pathname.endsWith("/stream") && request.method === "GET") {
+    // Extract paste ID from path: /api/presence/{pasteId}/stream
+    const pathParts = url.pathname.split("/");
+    const pasteId = pathParts[3];
+
+    if (!pasteId || pasteId === "stream") {
+      return Response.json(
+        { error: "Invalid paste ID" },
+        { status: 400, headers: cors }
+      );
+    }
+
+    // Require authentication
+    const token = extractToken(request);
+    if (!token) {
+      return Response.json(
+        { error: "Authentication required" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    const authResult = await validateGitHubToken(token, kv);
+    if (!authResult.valid || !authResult.user) {
+      return Response.json(
+        { error: "Invalid token" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    // Verify user has access to this paste
+    const metadata = await store.getMetadata(pasteId);
+    if (!metadata) {
+      return Response.json(
+        { error: "Paste not found" },
+        { status: 404, headers: cors }
+      );
+    }
+
+    const accessCheck = await checkAccess(metadata.acl, authResult.user, token, kv);
+    if (!accessCheck.authorized) {
+      return Response.json(
+        { error: "Access denied" },
+        { status: 403, headers: cors }
+      );
+    }
+
+    // Start SSE stream
+    return handlePresenceStream(pasteId, authResult.user);
+  }
+
+  if (url.pathname.startsWith("/api/presence/") && url.pathname.endsWith("/heartbeat") && request.method === "POST") {
+    // Extract paste ID from path: /api/presence/{pasteId}/heartbeat
+    const pathParts = url.pathname.split("/");
+    const pasteId = pathParts[3];
+
+    if (!pasteId || pasteId === "heartbeat") {
+      return Response.json(
+        { error: "Invalid paste ID" },
+        { status: 400, headers: cors }
+      );
+    }
+
+    // Require authentication
+    const token = extractToken(request);
+    if (!token) {
+      return Response.json(
+        { error: "Authentication required" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    const authResult = await validateGitHubToken(token, kv);
+    if (!authResult.valid || !authResult.user) {
+      return Response.json(
+        { error: "Invalid token" },
+        { status: 401, headers: cors }
+      );
+    }
+
+    return handleHeartbeat(pasteId, authResult.user.login);
   }
 
   // --- Paste Routes ---
