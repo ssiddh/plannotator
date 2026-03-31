@@ -20,6 +20,8 @@ interface PanelProps {
   onDeleteEditorAnnotation?: (id: string) => void;
   onClose?: () => void;
   onQuickCopy?: () => Promise<void>;
+  otherFileAnnotations?: { count: number; files: number };
+  onOtherFileAnnotationsClick?: () => void;
 }
 
 export const AnnotationPanel: React.FC<PanelProps> = ({
@@ -37,6 +39,8 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   onDeleteEditorAnnotation,
   onClose,
   onQuickCopy,
+  otherFileAnnotations,
+  onOtherFileAnnotationsClick,
 }) => {
   const isMobile = useIsMobile();
   const [copied, setCopied] = useState(false);
@@ -97,6 +101,15 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
             )}
           </div>
         </div>
+        {otherFileAnnotations && otherFileAnnotations.count > 0 && (
+          <button
+            onClick={onOtherFileAnnotationsClick}
+            className="mt-1.5 text-[10px] text-primary/70 hover:text-primary transition-colors cursor-pointer"
+            title="Show annotated files in sidebar"
+          >
+            +{otherFileAnnotations.count} in {otherFileAnnotations.files} other file{otherFileAnnotations.files === 1 ? '' : 's'}
+          </button>
+        )}
       </div>
 
       {/* List */}

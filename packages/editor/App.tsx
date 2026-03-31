@@ -286,6 +286,92 @@ const App: React.FC = () => {
     archive.clearSelection();
   }, [linkedDocHook, vaultBrowser, fileBrowser, archive]);
 
+  // Derive annotation counts per file from linked doc cache (includes active doc's live state)
+  const allAnnotationCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [fp, cached] of linkedDocHook.getDocAnnotations()) {
+      const count = cached.annotations.length + cached.globalAttachments.length;
+      if (count > 0) counts.set(fp, count);
+    }
+    return counts;
+  }, [linkedDocHook.getDocAnnotations, annotations, globalAttachments]);
+
+  // FileBrowser counts: only files under file browser directories
+  const fileAnnotationCounts = useMemo(() => {
+    if (fileBrowserDirs.length === 0) return allAnnotationCounts;
+    const counts = new Map<string, number>();
+    for (const [fp, count] of allAnnotationCounts) {
+      if (fileBrowserDirs.some(dir => fp.startsWith(dir + '/') || fp.startsWith(dir))) {
+        counts.set(fp, count);
+      }
+    }
+    return counts;
+  }, [allAnnotationCounts, fileBrowserDirs]);
+
+  // VaultBrowser uses relative paths — strip vaultPath prefix for lookup
+  const vaultAnnotationCounts = useMemo(() => {
+    if (!vaultPath) return new Map<string, number>();
+    const prefix = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
+    const counts = new Map<string, number>();
+    for (const [fp, count] of allAnnotationCounts) {
+      if (fp.startsWith(prefix)) {
+        counts.set(fp.slice(prefix.length), count);
+      }
+    }
+    return counts;
+  }, [allAnnotationCounts, vaultPath]);
+
+  const hasFileAnnotations = fileAnnotationCounts.size > 0;
+  const hasVaultAnnotations = vaultAnnotationCounts.size > 0;
+
+  // Annotations in other files (not the current view) — for the right panel "+N" indicator
+  const otherFileAnnotations = useMemo(() => {
+    const currentFile = linkedDocHook.filepath;
+    let count = 0;
+    let files = 0;
+    for (const [fp, n] of allAnnotationCounts) {
+      if (fp !== currentFile) {
+        count += n;
+        files++;
+      }
+    }
+    return count > 0 ? { count, files } : undefined;
+  }, [allAnnotationCounts, linkedDocHook.filepath]);
+
+  // Flash highlight for annotated files in the sidebar
+  const [highlightedFiles, setHighlightedFiles] = useState<Set<string> | undefined>();
+  const handleFlashAnnotatedFiles = React.useCallback(() => {
+    const filePaths = new Set(allAnnotationCounts.keys());
+    if (filePaths.size === 0) return;
+    // Open sidebar to the relevant tab so the flash is visible
+    if (!sidebar.isOpen || (sidebar.activeTab !== 'files' && sidebar.activeTab !== 'vault')) {
+      sidebar.open(hasVaultAnnotations && !hasFileAnnotations ? 'vault' : 'files');
+    }
+    // Clear first so re-triggering restarts the CSS animation
+    setHighlightedFiles(undefined);
+    requestAnimationFrame(() => {
+      setHighlightedFiles(filePaths);
+      setTimeout(() => setHighlightedFiles(undefined), 1200);
+    });
+  }, [allAnnotationCounts, sidebar]);
+
+  // Derive vault-relative highlighted files for VaultBrowser
+  const vaultHighlightedFiles = useMemo(() => {
+    if (!highlightedFiles || !vaultPath) return undefined;
+    const prefix = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
+    const relative = new Set<string>();
+    for (const fp of highlightedFiles) {
+      if (fp.startsWith(prefix)) relative.add(fp.slice(prefix.length));
+    }
+    return relative.size > 0 ? relative : undefined;
+  }, [highlightedFiles, vaultPath]);
+
+  // Context-aware back label for linked doc navigation
+  const backLabel = annotateSource === 'folder' ? 'file list'
+    : annotateSource === 'file' ? 'file'
+    : annotateSource === 'message' ? 'message'
+    : 'plan';
+
   const handleVaultFetchTree = React.useCallback(() => {
     vaultBrowser.fetchTree(vaultPath);
   }, [vaultBrowser, vaultPath]);
@@ -1421,6 +1507,8 @@ const App: React.FC = () => {
               hasDiff={planDiff.hasPreviousVersion}
               showFilesTab={showFilesTab && !archive.archiveMode}
               showVaultTab={showVaultTab}
+              hasFileAnnotations={hasFileAnnotations}
+              hasVaultAnnotations={hasVaultAnnotations}
               className="hidden lg:flex"
             />
           )}
@@ -1442,15 +1530,22 @@ const App: React.FC = () => {
                 onTocNavigate={handleTocNavigate}
                 linkedDocFilepath={linkedDocHook.filepath}
                 onLinkedDocBack={linkedDocHook.isActive ? handleLinkedDocBack : undefined}
+                backLabel={backLabel}
                 showFilesTab={showFilesTab && !archive.archiveMode}
+                fileAnnotationCounts={fileAnnotationCounts}
+                highlightedFiles={highlightedFiles}
                 fileBrowser={fileBrowser}
                 onFilesSelectFile={handleFileBrowserSelect}
                 onFilesFetchAll={() => fileBrowser.fetchAll(fileBrowserDirs)}
                 showVaultTab={showVaultTab && !archive.archiveMode}
                 vaultPath={vaultPath}
                 vaultBrowser={vaultBrowser}
+                vaultAnnotationCounts={vaultAnnotationCounts}
+                vaultHighlightedFiles={vaultHighlightedFiles}
                 onVaultSelectFile={handleVaultFileSelect}
                 onVaultFetchTree={handleVaultFetchTree}
+                hasFileAnnotations={hasFileAnnotations}
+                hasVaultAnnotations={hasVaultAnnotations}
                 versionInfo={versionInfo}
                 versions={planDiff.versions}
                 selectedBaseVersion={planDiff.diffBaseVersion}
@@ -1555,7 +1650,7 @@ const App: React.FC = () => {
                   showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
                   maxWidth={planMaxWidth}
                   onOpenLinkedDoc={handleOpenLinkedDoc}
-                  linkedDocInfo={linkedDocHook.isActive ? { filepath: linkedDocHook.filepath!, onBack: handleLinkedDocBack, label: vaultBrowser.activeFile ? 'Vault File' : fileBrowser.activeFile ? 'File' : undefined } : null}
+                  linkedDocInfo={linkedDocHook.isActive ? { filepath: linkedDocHook.filepath!, onBack: handleLinkedDocBack, label: vaultBrowser.activeFile ? 'Vault File' : fileBrowser.activeFile ? 'File' : undefined, backLabel } : null}
                   imageBaseDir={imageBaseDir}
                   copyLabel={annotateSource === 'message' ? 'Copy message' : annotateSource === 'file' || annotateSource === 'folder' ? 'Copy file' : undefined}
                   archiveInfo={archive.currentInfo}
@@ -1587,6 +1682,8 @@ const App: React.FC = () => {
             onQuickCopy={async () => {
               await navigator.clipboard.writeText(wrapFeedbackForAgent(annotationsOutput));
             }}
+            otherFileAnnotations={otherFileAnnotations}
+            onOtherFileAnnotationsClick={handleFlashAnnotatedFiles}
           />
         </div>
 
