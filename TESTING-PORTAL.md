@@ -97,6 +97,41 @@ Open http://localhost:3001 - you should see the demo plan with no errors.
 3. **Verify presence panel** shows both users
 4. **Close one browser** → viewer should disappear after ~30s
 
+### Test 5: Authenticated Sharing UI
+
+**Test the new Export Modal features:**
+
+1. **Open the portal** at http://localhost:3001
+2. **Set GitHub token** in browser console:
+   ```javascript
+   localStorage.setItem('plannotator_github_token', 'YOUR_TOKEN');
+   location.reload();
+   ```
+
+3. **Click the Export button** in the top-right
+4. **Go to the Share tab**
+5. **You should see:**
+   - "Authenticated Sharing" section
+   - "Require authentication" checkbox
+   - Username and team input fields
+   - "Export to GitHub PR" checkbox (disabled until auth required)
+   - "Create Authenticated Share" button
+
+6. **Test creating a private share:**
+   - Check "Require authentication"
+   - Enter your GitHub username in the users field
+   - Check "Export to GitHub PR"
+   - Click "Create Authenticated Share"
+   - Wait for success message
+   - Should see share URL and PR URL
+
+7. **Test without authentication:**
+   - Clear token: `localStorage.removeItem('plannotator_github_token')`
+   - Reload page
+   - Open Export modal → Share tab
+   - Should see "Sign in with GitHub" button
+   - Clicking it should redirect to OAuth flow
+
 ## Expected Behavior
 
 ### PR Annotations
@@ -159,7 +194,8 @@ After local testing, you can:
 
 ## Files Modified
 
-- `packages/editor/App.tsx` - Added hooks and state
+- `packages/editor/App.tsx` - Added hooks, state, and props for authenticated sharing
+- `packages/ui/components/ExportModal.tsx` - Added ACL controls and PR export UI
 - `test-portal-integration.sh` - Quick test script
 - `test-e2e-flow.sh` - Full E2E test with paste creation
 
