@@ -1,5 +1,7 @@
 import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
+import type { PasteACL, PasteMetadata } from "../auth/types";
+import { extractToken, validateGitHubToken, checkAccess } from "../auth/middleware";
 
 export interface PasteOptions {
   maxSize: number;
@@ -58,6 +60,43 @@ export async function createPaste(
   return { id };
 }
 
+/**
+ * Create a paste with ACL metadata.
+ * Requires authentication if ACL type is "whitelist".
+ */
+export async function createPasteWithACL(
+  data: string,
+  acl: PasteACL | undefined,
+  createdBy: string | undefined,
+  store: PasteStore,
+  options: Partial<PasteOptions> = {}
+): Promise<{ id: string }> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+
+  if (!data || typeof data !== "string") {
+    throw new PasteError('Missing or invalid "data" field', 400);
+  }
+
+  if (data.length > opts.maxSize) {
+    throw new PasteError(
+      `Payload too large (max ${Math.round(opts.maxSize / 1024)} KB compressed)`,
+      413
+    );
+  }
+
+  const id = generateId();
+  const metadata: PasteMetadata = {
+    id,
+    data,
+    acl: acl || { type: "public" },
+    createdBy,
+    createdAt: new Date().toISOString(),
+  };
+
+  await store.putMetadata(metadata, opts.ttlSeconds);
+  return { id };
+}
+
 export async function getPaste(
   id: string,
   store: PasteStore
@@ -82,7 +121,8 @@ export async function handleRequest(
   request: Request,
   store: PasteStore,
   cors: Record<string, string>,
-  options?: Partial<PasteOptions>
+  options?: Partial<PasteOptions>,
+  kv?: KVNamespace
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -91,17 +131,48 @@ export async function handleRequest(
   }
 
   if (url.pathname === "/api/paste" && request.method === "POST") {
-    let body: { data?: unknown };
+    let body: { data?: unknown; acl?: PasteACL };
     try {
-      body = (await request.json()) as { data?: unknown };
+      body = (await request.json()) as { data?: unknown; acl?: PasteACL };
     } catch {
       return Response.json(
         { error: "Invalid JSON body" },
         { status: 400, headers: cors }
       );
     }
+
     try {
-      const result = await createPaste(body.data as string, store, options);
+      // Extract token and validate if ACL requires auth
+      const token = extractToken(request);
+      let createdBy: string | undefined;
+
+      if (body.acl && body.acl.type === "whitelist") {
+        // Whitelist requires authentication
+        if (!token) {
+          return Response.json(
+            { error: "Authentication required for private shares" },
+            { status: 401, headers: cors }
+          );
+        }
+
+        const authResult = await validateGitHubToken(token, kv);
+        if (!authResult.valid) {
+          return Response.json(
+            { error: authResult.error || "Invalid token" },
+            { status: 401, headers: cors }
+          );
+        }
+
+        createdBy = authResult.user?.login;
+      }
+
+      const result = await createPasteWithACL(
+        body.data as string,
+        body.acl,
+        createdBy,
+        store,
+        options
+      );
       return Response.json(result, { status: 201, headers: cors });
     } catch (e) {
       if (e instanceof PasteError) {
@@ -119,15 +190,34 @@ export async function handleRequest(
 
   const match = url.pathname.match(ID_PATTERN);
   if (match && request.method === "GET") {
-    const data = await getPaste(match[1], store);
-    if (!data) {
+    const metadata = await store.getMetadata(match[1]);
+    if (!metadata) {
       return Response.json(
         { error: "Paste not found or expired" },
         { status: 404, headers: cors }
       );
     }
+
+    // Validate ACL
+    const token = extractToken(request);
+    let user;
+    if (token) {
+      const authResult = await validateGitHubToken(token, kv);
+      user = authResult.user;
+    }
+
+    const accessCheck = await checkAccess(metadata.acl, user, token, kv);
+    if (!accessCheck.authorized) {
+      const status = token ? 403 : 401; // 403 if authenticated but not authorized, 401 if not authenticated
+      return Response.json(
+        { error: accessCheck.reason || "Access denied" },
+        { status, headers: cors }
+      );
+    }
+
+    // Return only the encrypted data (not the full metadata)
     return Response.json(
-      { data },
+      { data: metadata.data },
       {
         headers: {
           ...cors,
