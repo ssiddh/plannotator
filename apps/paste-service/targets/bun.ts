@@ -3,6 +3,23 @@ import { join } from "path";
 import { handleRequest } from "../core/handler";
 import { corsHeaders, getAllowedOrigins } from "../core/cors";
 import { FsPasteStore } from "../stores/fs";
+import { readFileSync, existsSync } from "fs";
+
+// Load .dev.vars file if it exists (for local development)
+const devVarsPath = join(import.meta.dir, "..", ".dev.vars");
+if (existsSync(devVarsPath)) {
+  const content = readFileSync(devVarsPath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
+      if (key && valueParts.length > 0) {
+        process.env[key.trim()] = valueParts.join("=").trim();
+      }
+    }
+  }
+  console.log("Loaded environment variables from .dev.vars");
+}
 
 const port = parseInt(process.env.PASTE_PORT || "19433", 10);
 const dataDir =

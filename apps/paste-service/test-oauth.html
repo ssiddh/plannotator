@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plannotator OAuth Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #24292e;
+            margin-top: 0;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #24292e;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background: #2c3136;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f6f8fa;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .user-info img {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+        }
+        pre {
+            background: #f6f8fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Plannotator OAuth Test</h1>
+
+        <div id="status"></div>
+
+        <div id="controls">
+            <button onclick="testLogin()">1. Sign in with GitHub</button>
+            <button onclick="testTokenValidation()" id="validateBtn" disabled>2. Validate Token</button>
+            <button onclick="testCreatePrivatePaste()" id="createBtn" disabled>3. Create Private Paste</button>
+            <button onclick="clearAuth()">Clear Auth</button>
+        </div>
+
+        <div id="userInfo"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const PASTE_SERVICE = 'http://localhost:19433';
+
+        // Check for auth callback
+        window.addEventListener('DOMContentLoaded', () => {
+            const fragment = window.location.hash;
+            if (fragment.startsWith('#auth=')) {
+                handleAuthCallback(fragment);
+            } else {
+                checkExistingAuth();
+            }
+        });
+
+        function handleAuthCallback(fragment) {
+            try {
+                const encoded = fragment.slice(6); // Remove "#auth="
+                const decoded = atob(encoded);
+                const data = JSON.parse(decoded);
+
+                // Save to localStorage
+                localStorage.setItem('github_token', data.token);
+                localStorage.setItem('github_user', JSON.stringify({
+                    login: data.username,
+                    avatar_url: data.avatar
+                }));
+
+                // Clear fragment
+                history.replaceState(null, '', window.location.pathname);
+
+                showSuccess('✅ OAuth callback successful!');
+                displayUserInfo(data);
+                enableButtons();
+            } catch (error) {
+                showError('Failed to parse auth callback: ' + error.message);
+            }
+        }
+
+        function checkExistingAuth() {
+            const token = localStorage.getItem('github_token');
+            const userJson = localStorage.getItem('github_user');
+
+            if (token && userJson) {
+                const user = JSON.parse(userJson);
+                showInfo('Existing auth found');
+                displayUserInfo({
+                    token,
+                    username: user.login,
+                    avatar: user.avatar_url
+                });
+                enableButtons();
+            } else {
+                showInfo('No authentication. Click "Sign in with GitHub" to start.');
+            }
+        }
+
+        function testLogin() {
+            window.location.href = PASTE_SERVICE + '/api/auth/github/login';
+        }
+
+        async function testTokenValidation() {
+            const token = localStorage.getItem('github_token');
+            if (!token) {
+                showError('No token found. Please sign in first.');
+                return;
+            }
+
+            try {
+                showInfo('Validating token with paste service...');
+
+                const response = await fetch(PASTE_SERVICE + '/api/auth/token/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess('✅ Token is valid!');
+                    showResults('Token Validation Result', data);
+                } else {
+                    showError('Token validation failed: ' + data.error);
+                    showResults('Error Response', data);
+                }
+            } catch (error) {
+                showError('Request failed: ' + error.message);
+            }
+        }
+
+        async function testCreatePrivatePaste() {
+            const token = localStorage.getItem('github_token');
+            const user = JSON.parse(localStorage.getItem('github_user'));
+
+            if (!token) {
+                showError('No token found. Please sign in first.');
+                return;
+            }
+
+            try {
+                showInfo('Creating private paste with ACL...');
+
+                const payload = {
+                    data: 'This is a test private paste created via OAuth',
+                    acl: {
+                        type: 'whitelist',
+                        users: [user.login]
+                    }
+                };
+
+                const response = await fetch(PASTE_SERVICE + '/api/paste', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess('✅ Private paste created! ID: ' + data.id);
+                    showResults('Paste Creation Result', data);
+
+                    // Test retrieval
+                    await testRetrievePrivatePaste(data.id, token);
+                } else {
+                    showError('Paste creation failed: ' + data.error);
+                    showResults('Error Response', data);
+                }
+            } catch (error) {
+                showError('Request failed: ' + error.message);
+            }
+        }
+
+        async function testRetrievePrivatePaste(id, token) {
+            try {
+                showInfo('Retrieving private paste...');
+
+                const response = await fetch(PASTE_SERVICE + '/api/paste/' + id, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess('✅ Private paste retrieved successfully!');
+                    showResults('Paste Content', data);
+                } else {
+                    showError('Paste retrieval failed: ' + data.error);
+                }
+            } catch (error) {
+                showError('Request failed: ' + error.message);
+            }
+        }
+
+        function clearAuth() {
+            localStorage.removeItem('github_token');
+            localStorage.removeItem('github_user');
+            document.getElementById('userInfo').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('validateBtn').disabled = true;
+            document.getElementById('createBtn').disabled = true;
+            showInfo('Auth cleared. Sign in again to test.');
+        }
+
+        function enableButtons() {
+            document.getElementById('validateBtn').disabled = false;
+            document.getElementById('createBtn').disabled = false;
+        }
+
+        function displayUserInfo(data) {
+            const userInfo = document.getElementById('userInfo');
+            userInfo.innerHTML = `
+                <div class="user-info">
+                    <img src="${data.avatar}" alt="${data.username}">
+                    <div>
+                        <strong>@${data.username}</strong><br>
+                        <small>Token: ${data.token.substring(0, 20)}...</small>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showSuccess(message) {
+            document.getElementById('status').innerHTML =
+                `<div class="status success">${message}</div>`;
+        }
+
+        function showError(message) {
+            document.getElementById('status').innerHTML =
+                `<div class="status error">${message}</div>`;
+        }
+
+        function showInfo(message) {
+            document.getElementById('status').innerHTML =
+                `<div class="status info">${message}</div>`;
+        }
+
+        function showResults(title, data) {
+            const results = document.getElementById('results');
+            results.innerHTML = `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+        }
+    </script>
+</body>
+</html>
