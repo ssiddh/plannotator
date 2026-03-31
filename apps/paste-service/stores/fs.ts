@@ -1,9 +1,20 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
 import { join, resolve } from "path";
 import type { PasteStore } from "../core/storage";
+import type { PasteMetadata, PRMetadata } from "../auth/types";
 
 interface PasteFile {
   data: string;
+  expiresAt: number;
+}
+
+interface PasteFileWithMetadata {
+  metadata: PasteMetadata;
+  expiresAt: number;
+}
+
+interface PRMetadataFile {
+  metadata: PRMetadata;
   expiresAt: number;
 }
 
@@ -46,7 +57,77 @@ export class FsPasteStore implements PasteStore {
     }
   }
 
-  /** Delete expired pastes on startup */
+  async putMetadata(
+    metadata: PasteMetadata,
+    ttlSeconds: number
+  ): Promise<void> {
+    const entry: PasteFileWithMetadata = {
+      metadata,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    };
+    await Bun.write(this.safePath(metadata.id), JSON.stringify(entry));
+  }
+
+  async getMetadata(id: string): Promise<PasteMetadata | null> {
+    const path = this.safePath(id);
+    try {
+      const raw: any = await Bun.file(path).json();
+      if (Date.now() > raw.expiresAt) {
+        unlinkSync(path);
+        return null;
+      }
+
+      // Check if this is new format (has metadata field)
+      if (raw.metadata) {
+        return raw.metadata as PasteMetadata;
+      }
+
+      // Legacy format: plain data string
+      // Auto-migrate to metadata format
+      return {
+        id,
+        data: raw.data,
+        acl: { type: "public" },
+        createdAt: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Store PR metadata for a paste (30-day TTL) */
+  async putPRMetadata(pasteId: string, metadata: PRMetadata): Promise<void> {
+    const entry: PRMetadataFile = {
+      metadata,
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+    };
+    const prPath = resolve(join(this.dataDir, `pr-${pasteId}.json`));
+    if (!prPath.startsWith(this.resolvedDir)) {
+      throw new Error("Invalid paste ID");
+    }
+    await Bun.write(prPath, JSON.stringify(entry));
+  }
+
+  /** Retrieve PR metadata for a paste */
+  async getPRMetadata(pasteId: string): Promise<PRMetadata | null> {
+    const prPath = resolve(join(this.dataDir, `pr-${pasteId}.json`));
+    if (!prPath.startsWith(this.resolvedDir)) {
+      throw new Error("Invalid paste ID");
+    }
+
+    try {
+      const entry: PRMetadataFile = await Bun.file(prPath).json();
+      if (Date.now() > entry.expiresAt) {
+        unlinkSync(prPath);
+        return null;
+      }
+      return entry.metadata;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Delete expired pastes and PR metadata on startup */
   private sweep(): void {
     try {
       const files = readdirSync(this.dataDir).filter((f) => f.endsWith(".json"));
@@ -55,7 +136,7 @@ export class FsPasteStore implements PasteStore {
         const path = join(this.dataDir, file);
         try {
           const raw = readFileSync(path, "utf-8");
-          const entry: PasteFile = JSON.parse(raw);
+          const entry: PasteFile | PRMetadataFile | PasteFileWithMetadata = JSON.parse(raw);
           if (now > entry.expiresAt) {
             unlinkSync(path);
           }

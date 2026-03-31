@@ -3,6 +3,23 @@ import { join } from "path";
 import { handleRequest } from "../core/handler";
 import { corsHeaders, getAllowedOrigins } from "../core/cors";
 import { FsPasteStore } from "../stores/fs";
+import { readFileSync, existsSync } from "fs";
+
+// Load .dev.vars file if it exists (for local development)
+const devVarsPath = join(import.meta.dir, "..", ".dev.vars");
+if (existsSync(devVarsPath)) {
+  const content = readFileSync(devVarsPath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
+      if (key && valueParts.length > 0) {
+        process.env[key.trim()] = valueParts.join("=").trim();
+      }
+    }
+  }
+  console.log("Loaded environment variables from .dev.vars");
+}
 
 const port = parseInt(process.env.PASTE_PORT || "19433", 10);
 const dataDir =
@@ -14,12 +31,20 @@ const allowedOrigins = getAllowedOrigins(process.env.PASTE_ALLOWED_ORIGINS);
 
 const store = new FsPasteStore(dataDir);
 
+const authConfig = {
+  githubClientId: process.env.GITHUB_CLIENT_ID,
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
+  oauthRedirectUri: process.env.OAUTH_REDIRECT_URI || `http://localhost:${port}/api/auth/github/callback`,
+  portalUrl: process.env.PORTAL_URL || "http://localhost:3001",
+};
+
 Bun.serve({
   port,
   async fetch(request) {
     const origin = request.headers.get("Origin") ?? "";
     const cors = corsHeaders(origin, allowedOrigins);
-    return handleRequest(request, store, cors, { maxSize, ttlSeconds });
+    // Pass undefined for KV (no token caching in filesystem mode) and auth config
+    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined, authConfig);
   },
 });
 
