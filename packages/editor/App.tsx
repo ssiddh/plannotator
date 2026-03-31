@@ -63,6 +63,8 @@ import { PlanDiffViewer } from '@plannotator/ui/components/plan-diff/PlanDiffVie
 import type { PlanDiffMode } from '@plannotator/ui/components/plan-diff/PlanDiffModeSwitcher';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
+import { useGitHubPRSync } from '@plannotator/ui/hooks/useGitHubPRSync';
+import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -110,10 +112,55 @@ const App: React.FC = () => {
   const [pasteApiUrl, setPasteApiUrl] = useState<string | undefined>(undefined);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
+  const [githubToken, setGithubToken] = useState<string | null>(null);
+  const [pasteId, setPasteId] = useState<string | null>(null);
+  const [prMetadata, setPrMetadata] = useState<{ repo: string; pr_number: number; pr_url: string } | null>(null);
 
   useEffect(() => {
     document.title = repoInfo ? `${repoInfo.display} · Plannotator` : "Plannotator";
   }, [repoInfo]);
+
+  // Load GitHub token from localStorage (set during OAuth flow)
+  useEffect(() => {
+    const token = storage.getItem('plannotator_github_token');
+    if (token) {
+      setGithubToken(token);
+    }
+  }, []);
+
+  // Extract pasteId from URL if present (e.g., /p/abc123)
+  useEffect(() => {
+    const match = window.location.pathname.match(/\/p\/([^/]+)/);
+    if (match) {
+      setPasteId(match[1]);
+    }
+  }, []);
+
+  // Fetch PR metadata when we have a pasteId and token
+  useEffect(() => {
+    if (!pasteId || !githubToken || !pasteApiUrl) return;
+
+    const fetchPRMetadata = async () => {
+      try {
+        const res = await fetch(`${pasteApiUrl}/api/paste/${pasteId}`, {
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.github_pr) {
+            setPrMetadata(data.github_pr);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch PR metadata:', error);
+      }
+    };
+
+    fetchPRMetadata();
+  }, [pasteId, githubToken, pasteApiUrl]);
 
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [initialExportTab, setInitialExportTab] = useState<'share' | 'annotations' | 'notes'>();
@@ -386,14 +433,30 @@ const App: React.FC = () => {
   const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
   const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<Annotation>({ enabled: isApiMode });
 
-  // Merge local + SSE annotations, deduping draft-restored externals against
+  // GitHub PR sync: poll for PR review comments and convert to annotations
+  const {
+    annotations: prAnnotations,
+    isLoading: prLoading,
+    error: prError,
+  } = useGitHubPRSync({
+    pasteId: pasteId ?? '',
+    prMetadata,
+    blocks,
+    token: githubToken,
+    pasteServiceUrl: pasteApiUrl || 'http://localhost:19433',
+    enabled: !!githubToken && !!prMetadata && !!pasteId,
+  });
+
+  // Merge local + SSE annotations + PR annotations, deduping draft-restored externals against
   // live SSE versions. Prefer the SSE version when both exist (same source,
   // type, and originalText). This avoids the timing issues of an effect-based
   // cleanup — draft-restored externals persist until SSE actually re-delivers them.
   const allAnnotations = useMemo(() => {
-    if (externalAnnotations.length === 0) return annotations;
+    const combined = [...annotations, ...prAnnotations];
 
-    const local = annotations.filter(a => {
+    if (externalAnnotations.length === 0) return combined;
+
+    const local = combined.filter(a => {
       if (!a.source) return true;
       return !externalAnnotations.some(ext =>
         ext.source === a.source &&
@@ -403,7 +466,7 @@ const App: React.FC = () => {
     });
 
     return [...local, ...externalAnnotations];
-  }, [annotations, externalAnnotations]);
+  }, [annotations, externalAnnotations, prAnnotations]);
 
   // Plan diff state — memoize filtered annotation lists to avoid new references per render
   const diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
@@ -1496,6 +1559,15 @@ const App: React.FC = () => {
               dismiss
             </button>
           </div>
+        )}
+
+        {/* Presence Panel - shows active viewers */}
+        {githubToken && pasteId && (
+          <PresencePanel
+            pasteId={pasteId}
+            token={githubToken}
+            pasteServiceUrl={pasteApiUrl || 'http://localhost:19433'}
+          />
         )}
 
         {/* Main Content */}
