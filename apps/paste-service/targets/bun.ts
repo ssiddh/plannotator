@@ -19,7 +19,8 @@ Bun.serve({
   async fetch(request) {
     const origin = request.headers.get("Origin") ?? "";
     const cors = corsHeaders(origin, allowedOrigins);
-    return handleRequest(request, store, cors, { maxSize, ttlSeconds });
+    // Pass undefined for KV (no token caching in filesystem mode)
+    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined);
   },
 });
 

@@ -1,9 +1,15 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
 import { join, resolve } from "path";
 import type { PasteStore } from "../core/storage";
+import type { PasteMetadata } from "../auth/types";
 
 interface PasteFile {
   data: string;
+  expiresAt: number;
+}
+
+interface PasteFileWithMetadata {
+  metadata: PasteMetadata;
   expiresAt: number;
 }
 
@@ -41,6 +47,44 @@ export class FsPasteStore implements PasteStore {
         return null;
       }
       return entry.data;
+    } catch {
+      return null;
+    }
+  }
+
+  async putMetadata(
+    metadata: PasteMetadata,
+    ttlSeconds: number
+  ): Promise<void> {
+    const entry: PasteFileWithMetadata = {
+      metadata,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    };
+    await Bun.write(this.safePath(metadata.id), JSON.stringify(entry));
+  }
+
+  async getMetadata(id: string): Promise<PasteMetadata | null> {
+    const path = this.safePath(id);
+    try {
+      const raw: any = await Bun.file(path).json();
+      if (Date.now() > raw.expiresAt) {
+        unlinkSync(path);
+        return null;
+      }
+
+      // Check if this is new format (has metadata field)
+      if (raw.metadata) {
+        return raw.metadata as PasteMetadata;
+      }
+
+      // Legacy format: plain data string
+      // Auto-migrate to metadata format
+      return {
+        id,
+        data: raw.data,
+        acl: { type: "public" },
+        createdAt: new Date().toISOString(),
+      };
     } catch {
       return null;
     }
