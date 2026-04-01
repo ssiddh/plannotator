@@ -86,7 +86,8 @@ export function useSharing(
   setGlobalAttachments: React.Dispatch<React.SetStateAction<ImageAttachment[]>>,
   onSharedLoad?: () => void,
   shareBaseUrl?: string,
-  pasteApiUrl?: string
+  pasteApiUrl?: string,
+  githubToken?: string | null
 ): UseSharingResult {
   const [isSharedSession, setIsSharedSession] = useState(false);
   const [isLoadingShared, setIsLoadingShared] = useState(true);
@@ -118,34 +119,43 @@ export function useSharing(
         const fragment = window.location.hash.slice(1);
         const encryptionKey = fragment.startsWith('key=') ? fragment.slice(4) : undefined;
 
-        const payload = await loadFromPasteId(pasteId, pasteApiUrl, encryptionKey);
-        if (payload) {
-          setMarkdown(payload.p);
+        try {
+          const payload = await loadFromPasteId(pasteId, pasteApiUrl, encryptionKey, githubToken);
+          if (payload) {
+            setMarkdown(payload.p);
 
-          const restoredAnnotations = fromShareable(payload.a, payload.d, payload.s);
-          setAnnotations(restoredAnnotations);
+            const restoredAnnotations = fromShareable(payload.a, payload.d, payload.s);
+            setAnnotations(restoredAnnotations);
 
-          if (payload.g?.length) {
-            const parsed = parseShareableImages(payload.g) ?? [];
-            setGlobalAttachments(parsed);
-            setSharedGlobalAttachments(parsed);
+            if (payload.g?.length) {
+              const parsed = parseShareableImages(payload.g) ?? [];
+              setGlobalAttachments(parsed);
+              setSharedGlobalAttachments(parsed);
+            }
+
+            setPendingSharedAnnotations(restoredAnnotations);
+            setIsSharedSession(true);
+            onSharedLoad?.();
+
+            // Remove the /p/<id> path from browser history so a refresh doesn't
+            // attempt a network fetch. The plan is now held in memory.
+            const basePath = window.location.pathname.replace(/\/p\/[A-Za-z0-9]+$/, '') || '/';
+            window.history.replaceState({}, '', basePath);
+
+            return true;
           }
-
-          setPendingSharedAnnotations(restoredAnnotations);
-          setIsSharedSession(true);
-          onSharedLoad?.();
-
-          // Remove the /p/<id> path from browser history so a refresh doesn't
-          // attempt a network fetch. The plan is now held in memory.
-          const basePath = window.location.pathname.replace(/\/p\/[A-Za-z0-9]+$/, '') || '/';
-          window.history.replaceState({}, '', basePath);
-
-          return true;
+          // Paste fetch failed — short URL path can't fall back to hash parsing
+          // (the hash contains #key=, not plan data).
+          setShareLoadError('Failed to load shared plan — the link may be expired or incomplete.');
+          return false;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'AUTH_REQUIRED') {
+            setShareLoadError('This plan requires authentication. Please sign in with GitHub to view it.');
+          } else {
+            setShareLoadError('Failed to load shared plan — the link may be expired or incomplete.');
+          }
+          return false;
         }
-        // Paste fetch failed — short URL path can't fall back to hash parsing
-        // (the hash contains #key=, not plan data).
-        setShareLoadError('Failed to load shared plan — the link may be expired or incomplete.');
-        return false;
       }
 
       const hash = window.location.hash.slice(1);
@@ -283,11 +293,18 @@ export function useSharing(
       if (shortMatch) {
         const pasteId = shortMatch[1];
         const encryptionKey = shortMatch[2]; // undefined if no key fragment
-        const loaded = await loadFromPasteId(pasteId, pasteApiUrl, encryptionKey);
-        if (!loaded) {
+        try {
+          const loaded = await loadFromPasteId(pasteId, pasteApiUrl, encryptionKey, githubToken);
+          if (!loaded) {
+            return { success: false, count: 0, planTitle: '', error: 'Failed to load from short URL — paste may have expired' };
+          }
+          payload = loaded;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'AUTH_REQUIRED') {
+            return { success: false, count: 0, planTitle: '', error: 'This plan requires authentication. Please sign in with GitHub.' };
+          }
           return { success: false, count: 0, planTitle: '', error: 'Failed to load from short URL — paste may have expired' };
         }
-        payload = loaded;
       } else {
         // Fall back to hash-based URL
         const hashIndex = url.indexOf('#');

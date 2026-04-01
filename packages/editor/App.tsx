@@ -537,7 +537,8 @@ const App: React.FC = () => {
       setIsLoading(false);
     },
     shareBaseUrl,
-    pasteApiUrl
+    pasteApiUrl,
+    githubToken
   );
 
   // Auto-save annotation drafts

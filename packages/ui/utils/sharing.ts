@@ -288,15 +288,26 @@ export async function createShortShareUrl(
 export async function loadFromPasteId(
   pasteId: string,
   pasteApiUrl: string = DEFAULT_PASTE_API,
-  encryptionKey?: string
+  encryptionKey?: string,
+  githubToken?: string | null
 ): Promise<SharePayload | null> {
   try {
+    const headers: Record<string, string> = {};
+    if (githubToken) {
+      headers.Authorization = `Bearer ${githubToken}`;
+    }
+
     const response = await fetch(`${pasteApiUrl}/api/paste/${pasteId}`, {
       signal: AbortSignal.timeout(10_000),
+      headers,
     });
 
     if (!response.ok) {
       console.warn(`[sharing] Paste fetch returned ${response.status} for id ${pasteId}`);
+      // Throw specific error for auth issues so caller can handle it
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('AUTH_REQUIRED');
+      }
       return null;
     }
 
@@ -312,6 +323,9 @@ export async function loadFromPasteId(
     return await decompress(result.data) as SharePayload;
   } catch (e) {
     console.warn('[sharing] Failed to load from paste ID:', e);
+    if (e instanceof Error && e.message === 'AUTH_REQUIRED') {
+      throw e; // Re-throw auth errors so caller can handle them
+    }
     return null;
   }
 }
