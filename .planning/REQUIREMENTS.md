@@ -127,47 +127,47 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-03 | Phase 2 | Pending |
 | AUTH-04 | Phase 2 | Pending |
 | AUTH-05 | Phase 2 | Pending |
-| PR-01 | Phase 3 | Pending |
-| PR-02 | Phase 3 | Pending |
-| PR-03 | Phase 3 | Pending |
-| PR-04 | Phase 3 | Pending |
-| PR-05 | Phase 3 | Pending |
-| PR-06 | Phase 3 | Pending |
-| SYNC-IN-01 | Phase 4 | Pending |
-| SYNC-IN-02 | Phase 4 | Pending |
-| SYNC-IN-03 | Phase 4 | Pending |
-| SYNC-IN-04 | Phase 4 | Pending |
-| SYNC-IN-05 | Phase 4 | Pending |
-| SYNC-IN-06 | Phase 4 | Pending |
-| SYNC-IN-07 | Phase 4 | Pending |
-| SYNC-IN-08 | Phase 4 | Pending |
-| SYNC-IN-09 | Phase 4 | Pending |
-| SYNC-OUT-01 | Phase 5 | Pending |
-| SYNC-OUT-02 | Phase 5 | Pending |
-| SYNC-OUT-03 | Phase 5 | Pending |
-| SYNC-OUT-04 | Phase 5 | Pending |
-| SYNC-OUT-05 | Phase 5 | Pending |
-| SYNC-OUT-06 | Phase 5 | Pending |
-| SYNC-OUT-07 | Phase 5 | Pending |
-| SYNC-OUT-08 | Phase 5 | Pending |
-| THREAD-01 | Phase 6 | Pending |
-| THREAD-02 | Phase 6 | Pending |
-| THREAD-03 | Phase 6 | Pending |
-| THREAD-04 | Phase 6 | Pending |
-| THREAD-05 | Phase 6 | Pending |
-| THREAD-06 | Phase 6 | Pending |
-| THREAD-07 | Phase 6 | Pending |
-| DATA-01 | Phase 7 | Pending |
-| DATA-02 | Phase 7 | Pending |
-| DATA-03 | Phase 7 | Pending |
-| DATA-04 | Phase 7 | Pending |
-| DATA-05 | Phase 7 | Pending |
+| DATA-01 | Phase 3 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 3 | Pending |
+| DATA-04 | Phase 3 | Pending |
+| DATA-05 | Phase 3 | Pending |
+| PR-01 | Phase 4 | Pending |
+| PR-02 | Phase 4 | Pending |
+| PR-03 | Phase 4 | Pending |
+| PR-04 | Phase 4 | Pending |
+| PR-05 | Phase 4 | Pending |
+| PR-06 | Phase 4 | Pending |
+| SYNC-IN-01 | Phase 5 | Pending |
+| SYNC-IN-02 | Phase 5 | Pending |
+| SYNC-IN-03 | Phase 5 | Pending |
+| SYNC-IN-04 | Phase 5 | Pending |
+| SYNC-IN-05 | Phase 5 | Pending |
+| SYNC-IN-06 | Phase 5 | Pending |
+| SYNC-IN-07 | Phase 5 | Pending |
+| SYNC-IN-08 | Phase 5 | Pending |
+| SYNC-IN-09 | Phase 5 | Pending |
+| SYNC-OUT-01 | Phase 6 | Pending |
+| SYNC-OUT-02 | Phase 6 | Pending |
+| SYNC-OUT-03 | Phase 6 | Pending |
+| SYNC-OUT-04 | Phase 6 | Pending |
+| SYNC-OUT-05 | Phase 6 | Pending |
+| SYNC-OUT-06 | Phase 6 | Pending |
+| SYNC-OUT-07 | Phase 6 | Pending |
+| SYNC-OUT-08 | Phase 6 | Pending |
+| THREAD-01 | Phase 7 | Pending |
+| THREAD-02 | Phase 7 | Pending |
+| THREAD-03 | Phase 7 | Pending |
+| THREAD-04 | Phase 7 | Pending |
+| THREAD-05 | Phase 7 | Pending |
+| THREAD-06 | Phase 7 | Pending |
+| THREAD-07 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 47 total
 - Mapped to phases: 47
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-01*
-*Last updated: 2026-04-01 after initial definition*
+*Last updated: 2026-04-01 after roadmap creation*
