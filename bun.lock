@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "plannotator",
@@ -61,7 +62,7 @@
     },
     "apps/opencode-plugin": {
       "name": "@plannotator/opencode",
-      "version": "0.15.5",
+      "version": "0.16.2",
       "dependencies": {
         "@opencode-ai/plugin": "^1.1.10",
       },
@@ -83,7 +84,7 @@
     },
     "apps/pi-extension": {
       "name": "@plannotator/pi-extension",
-      "version": "0.15.5",
+      "version": "0.16.2",
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": ">=0.53.0",
       },
@@ -154,6 +155,13 @@
         "tailwindcss": "^4.1.18",
       },
     },
+    "packages/github": {
+      "name": "@plannotator/github",
+      "version": "0.0.1",
+      "peerDependencies": {
+        "react": ">=18",
+      },
+    },
     "packages/review-editor": {
       "name": "@plannotator/review-editor",
       "version": "0.0.1",
@@ -169,7 +177,7 @@
     },
     "packages/server": {
       "name": "@plannotator/server",
-      "version": "0.15.5",
+      "version": "0.16.2",
       "dependencies": {
         "@plannotator/ai": "workspace:*",
         "@plannotator/shared": "workspace:*",
@@ -621,6 +629,8 @@
     "@plannotator/ai": ["@plannotator/ai@workspace:packages/ai"],
 
     "@plannotator/editor": ["@plannotator/editor@workspace:packages/editor"],
+
+    "@plannotator/github": ["@plannotator/github@workspace:packages/github"],
 
     "@plannotator/hooks": ["@plannotator/hooks@workspace:apps/hook"],
 

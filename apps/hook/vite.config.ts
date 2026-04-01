@@ -19,6 +19,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@plannotator/ui': path.resolve(__dirname, '../../packages/ui'),
+      '@plannotator/github/client': path.resolve(__dirname, '../../packages/github/client/GitHubProvider.tsx'),
+      '@plannotator/github': path.resolve(__dirname, '../../packages/github'),
       '@plannotator/editor/styles': path.resolve(__dirname, '../../packages/editor/index.css'),
       '@plannotator/editor': path.resolve(__dirname, '../../packages/editor/App.tsx'),
     }

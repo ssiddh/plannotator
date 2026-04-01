@@ -2,6 +2,9 @@
   "name": "@plannotator/github",
   "version": "0.0.1",
   "private": true,
+  "peerDependencies": {
+    "react": ">=18"
+  },
   "exports": {
     "./server": "./server/handler.ts",
     "./server/middleware": "./server/middleware.ts",
