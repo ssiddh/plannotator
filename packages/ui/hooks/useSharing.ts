@@ -146,10 +146,13 @@ export function useSharing(
           }
           // Paste fetch failed — short URL path can't fall back to hash parsing
           // (the hash contains #key=, not plan data).
+          console.warn('[useSharing] Paste fetch returned null');
           setShareLoadError('Failed to load shared plan — the link may be expired or incomplete.');
           return false;
         } catch (e) {
+          console.error('[useSharing] Error loading paste:', e);
           if (e instanceof Error && e.message === 'AUTH_REQUIRED') {
+            console.log('[useSharing] Setting auth required error');
             setShareLoadError('This plan requires authentication. Please sign in with GitHub to view it.');
           } else {
             setShareLoadError('Failed to load shared plan — the link may be expired or incomplete.');

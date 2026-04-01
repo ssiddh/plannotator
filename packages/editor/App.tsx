@@ -1889,10 +1889,32 @@ const App: React.FC = () => {
         <ConfirmDialog
           isOpen={!!shareLoadError && !isApiMode}
           onClose={clearShareLoadError}
-          title="Shared Plan Could Not Be Loaded"
+          onConfirm={
+            shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')
+              ? () => {
+                  clearShareLoadError();
+                  window.location.href = `${pasteApiUrl || 'http://localhost:19433'}/api/auth/github/login`;
+                }
+              : undefined
+          }
+          title={
+            shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')
+              ? "Authentication Required"
+              : "Shared Plan Could Not Be Loaded"
+          }
           message={shareLoadError}
-          subMessage="You are viewing a demo plan. This is sample content — it is not your data or anyone else's."
+          subMessage={
+            shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')
+              ? "This is a private plan. Sign in with GitHub to access it."
+              : "You are viewing a demo plan. This is sample content — it is not your data or anyone else's."
+          }
+          confirmText={
+            shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')
+              ? "Sign in with GitHub"
+              : undefined
+          }
           variant="warning"
+          showCancel={shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')}
         />
 
         {/* Save-to-notes toast */}
