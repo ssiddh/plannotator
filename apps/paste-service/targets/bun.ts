@@ -4,6 +4,7 @@ import { handleRequest } from "../core/handler";
 import { corsHeaders, getAllowedOrigins } from "../core/cors";
 import { FsPasteStore } from "../stores/fs";
 import { readFileSync, existsSync } from "fs";
+import { createGitHubHandler } from "@plannotator/github/server";
 
 // Load .dev.vars file if it exists (for local development)
 const devVarsPath = join(import.meta.dir, "..", ".dev.vars");
@@ -31,20 +32,38 @@ const allowedOrigins = getAllowedOrigins(process.env.PASTE_ALLOWED_ORIGINS);
 
 const store = new FsPasteStore(dataDir);
 
-const authConfig = {
-  githubClientId: process.env.GITHUB_CLIENT_ID,
-  githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
-  oauthRedirectUri: process.env.OAUTH_REDIRECT_URI || `http://localhost:${port}/api/auth/github/callback`,
+const githubConfig = {
+  clientId: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  redirectUri: process.env.OAUTH_REDIRECT_URI || `http://localhost:${port}/api/auth/github/callback`,
   portalUrl: process.env.PORTAL_URL || "http://localhost:3001",
+  defaultRepo: process.env.GITHUB_DEFAULT_REPO,
+  prBaseBranch: process.env.GITHUB_PR_BASE_BRANCH,
 };
+
+// Create PR storage adapter from filesystem store
+const prStorage = {
+  async putPRMetadata(pasteId: string, metadata: any) {
+    if ('putPRMetadata' in store) {
+      await (store as any).putPRMetadata(pasteId, metadata);
+    }
+  },
+  async getPRMetadata(pasteId: string) {
+    if ('getPRMetadata' in store) {
+      return (store as any).getPRMetadata(pasteId);
+    }
+    return null;
+  },
+};
+
+const githubHandler = createGitHubHandler(githubConfig, prStorage);
 
 Bun.serve({
   port,
   async fetch(request) {
     const origin = request.headers.get("Origin") ?? "";
     const cors = corsHeaders(origin, allowedOrigins);
-    // Pass undefined for KV (no token caching in filesystem mode) and auth config
-    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined, authConfig);
+    return handleRequest(request, store, cors, { maxSize, ttlSeconds }, undefined, [githubHandler]);
   },
 });
 
