@@ -1,14 +1,9 @@
 import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
-import type { PasteACL, PasteMetadata, PRMetadata } from "../auth/types";
-import { extractToken, validateGitHubToken, checkAccess } from "../auth/middleware";
-import {
-  handleLogin,
-  handleCallback,
-  handleTokenValidate,
-  handleTokenRefresh,
-} from "../auth/github";
-import { exportToPR, fetchPRComments } from "../github/pr";
+import type { PasteACL, PasteMetadata, PRMetadata } from "@plannotator/github/types";
+import { extractToken, validateGitHubToken, checkAccess } from "@plannotator/github/server/middleware";
+import type { GitHubHandler } from "@plannotator/github/server";
+import { exportToPR } from "@plannotator/github/server/pr";
 import { handlePresenceStream, handleHeartbeat } from "../presence/handler";
 
 export interface PasteOptions {
@@ -22,7 +17,6 @@ const DEFAULT_OPTIONS: PasteOptions = {
 };
 
 const ID_PATTERN = /^\/api\/paste\/([A-Za-z0-9]{6,16})$/;
-const PR_COMMENTS_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/comments$/;
 
 /**
  * Generate a short URL-safe ID (8 chars, ~47.6 bits of entropy).
@@ -122,16 +116,11 @@ export class PasteError extends Error {
   }
 }
 
-export interface AuthConfig {
-  githubClientId?: string;
-  githubClientSecret?: string;
-  oauthRedirectUri?: string;
-  portalUrl?: string;
-}
-
 /**
  * Shared HTTP request handler for the paste service.
  * Both Bun and Cloudflare targets delegate to this after wiring up their store.
+ *
+ * GitHub routes (OAuth, PR) are handled by middleware (GitHubHandler) per D-01.
  */
 export async function handleRequest(
   request: Request,
@@ -139,7 +128,7 @@ export async function handleRequest(
   cors: Record<string, string>,
   options?: Partial<PasteOptions>,
   kv?: KVNamespace,
-  authConfig?: AuthConfig
+  middleware?: GitHubHandler[]
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -147,164 +136,11 @@ export async function handleRequest(
     return new Response(null, { status: 204, headers: cors });
   }
 
-  // --- OAuth Routes ---
-
-  if (url.pathname === "/api/auth/github/login" && request.method === "GET") {
-    if (!authConfig?.githubClientId || !authConfig?.oauthRedirectUri) {
-      return Response.json(
-        { error: "OAuth not configured" },
-        { status: 503, headers: cors }
-      );
-    }
-    return handleLogin(
-      request,
-      authConfig.githubClientId,
-      authConfig.oauthRedirectUri
-    );
-  }
-
-  if (url.pathname === "/api/auth/github/callback" && request.method === "GET") {
-    if (
-      !authConfig?.githubClientId ||
-      !authConfig?.githubClientSecret ||
-      !authConfig?.oauthRedirectUri ||
-      !authConfig?.portalUrl
-    ) {
-      return Response.json(
-        { error: "OAuth not configured" },
-        { status: 503, headers: cors }
-      );
-    }
-    return handleCallback(
-      request,
-      authConfig.githubClientId,
-      authConfig.githubClientSecret,
-      authConfig.oauthRedirectUri,
-      authConfig.portalUrl
-    );
-  }
-
-  if (url.pathname === "/api/auth/token/validate" && request.method === "POST") {
-    return handleTokenValidate(request);
-  }
-
-  if (url.pathname === "/api/auth/token/refresh" && request.method === "POST") {
-    if (!authConfig?.githubClientId || !authConfig?.githubClientSecret) {
-      return Response.json(
-        { error: "OAuth not configured" },
-        { status: 503, headers: cors }
-      );
-    }
-    return handleTokenRefresh(
-      request,
-      authConfig.githubClientId,
-      authConfig.githubClientSecret
-    );
-  }
-
-  // --- GitHub PR Routes ---
-
-  if (url.pathname === "/api/pr/create" && request.method === "POST") {
-    let body: { pasteId?: string; planMarkdown?: string; defaultRepo?: string };
-    try {
-      body = (await request.json()) as { pasteId?: string; planMarkdown?: string; defaultRepo?: string };
-    } catch {
-      return Response.json(
-        { error: "Invalid JSON body" },
-        { status: 400, headers: cors }
-      );
-    }
-
-    if (!body.pasteId || !body.planMarkdown) {
-      return Response.json(
-        { error: "Missing pasteId or planMarkdown" },
-        { status: 400, headers: cors }
-      );
-    }
-
-    // Extract and validate token
-    const token = extractToken(request);
-    if (!token) {
-      return Response.json(
-        { error: "Authentication required to create PR" },
-        { status: 401, headers: cors }
-      );
-    }
-
-    try {
-      const prMetadata = await exportToPR(
-        body.pasteId,
-        body.planMarkdown,
-        token,
-        body.defaultRepo || process.env.GITHUB_DEFAULT_REPO
-      );
-
-      // Store PR metadata (KV or filesystem)
-      if (kv) {
-        await kv.put(
-          `pr:${body.pasteId}`,
-          JSON.stringify(prMetadata),
-          { expirationTtl: 30 * 24 * 60 * 60 } // 30 days
-        );
-      } else if ('putPRMetadata' in store) {
-        await (store as any).putPRMetadata(body.pasteId, prMetadata);
-      }
-
-      return Response.json(prMetadata, { status: 201, headers: cors });
-    } catch (e) {
-      console.error("PR export failed:", e);
-      return Response.json(
-        { error: e instanceof Error ? e.message : "Failed to create PR" },
-        { status: 500, headers: cors }
-      );
-    }
-  }
-
-  const prCommentsMatch = url.pathname.match(PR_COMMENTS_PATTERN);
-  if (prCommentsMatch && request.method === "GET") {
-    const pasteId = prCommentsMatch[1];
-
-    // Extract and validate token
-    const token = extractToken(request);
-    if (!token) {
-      return Response.json(
-        { error: "Authentication required to fetch PR comments" },
-        { status: 401, headers: cors }
-      );
-    }
-
-    // Load PR metadata (KV or filesystem)
-    let prMetadata: PRMetadata | null = null;
-
-    if (kv) {
-      const prMetadataJson = await kv.get(`pr:${pasteId}`);
-      if (prMetadataJson) {
-        try {
-          prMetadata = JSON.parse(prMetadataJson);
-        } catch (e) {
-          console.error("Failed to parse PR metadata from KV:", e);
-        }
-      }
-    } else if ('getPRMetadata' in store) {
-      prMetadata = await (store as any).getPRMetadata(pasteId);
-    }
-
-    if (!prMetadata) {
-      return Response.json(
-        { error: "No PR found for this paste" },
-        { status: 404, headers: cors }
-      );
-    }
-
-    try {
-      const comments = await fetchPRComments(prMetadata, token);
-      return Response.json(comments, { headers: cors });
-    } catch (e) {
-      console.error("Failed to fetch PR comments:", e);
-      return Response.json(
-        { error: e instanceof Error ? e.message : "Failed to fetch PR comments" },
-        { status: 500, headers: cors }
-      );
+  // Try middleware first (GitHub plugin routes, per D-01)
+  if (middleware) {
+    for (const mw of middleware) {
+      const response = await mw.handle(request, url);
+      if (response) return response;
     }
   }
 
@@ -440,7 +276,7 @@ export async function handleRequest(
         options
       );
 
-      // If GitHub PR export requested, create PR
+      // If GitHub PR export requested, create PR via plugin
       let prMetadata: PRMetadata | undefined;
       if (body.github_export && token && body.plan_markdown) {
         try {
@@ -448,7 +284,9 @@ export async function handleRequest(
             result.id,
             body.plan_markdown,
             token,
-            process.env.GITHUB_DEFAULT_REPO
+            {
+              defaultRepo: process.env.GITHUB_DEFAULT_REPO,
+            }
           );
 
           // Store PR metadata (KV or filesystem)
@@ -522,6 +360,7 @@ export async function handleRequest(
       );
     }
 
+    // TODO(phase-4): Move PR metadata lookup to plugin. Client should query /api/pr/:id/metadata separately.
     // Check if PR metadata exists (KV or filesystem)
     let prMetadata: PRMetadata | undefined;
     if (kv) {

@@ -1,36 +1,11 @@
 /**
- * Authentication and ACL type definitions for the paste service.
+ * Re-export all types from the GitHub plugin package.
+ * This file exists for backward compatibility with any code importing from paste-service auth.
  */
-
-export interface PasteACL {
-  type: "public" | "whitelist";
-  users?: string[];        // GitHub usernames
-  teams?: string[];        // "org/team" format (e.g., "myorg/reviewers")
-}
-
-export interface PasteMetadata {
-  id: string;
-  data: string;            // Encrypted plan content
-  acl: PasteACL;
-  createdBy?: string;      // GitHub username (optional for backward compat)
-  createdAt: string;       // ISO timestamp
-}
-
-export interface GitHubUser {
-  login: string;
-  avatar_url: string;
-  name?: string;
-}
-
-export interface AuthResult {
-  valid: boolean;
-  user?: GitHubUser;
-  error?: string;
-}
-
-export interface PRMetadata {
-  repo: string;           // "owner/repo" format
-  pr_number: number;
-  pr_url: string;
-  created_at: string;
-}
+export type {
+  PasteACL,
+  PasteMetadata,
+  GitHubUser,
+  AuthResult,
+  PRMetadata,
+} from "@plannotator/github/types";
