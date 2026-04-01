@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Plugin Architecture
 
-- [ ] **ARCH-01**: All GitHub integration code lives in isolated `packages/github/` package
+- [x] **ARCH-01**: All GitHub integration code lives in isolated `packages/github/` package
 - [ ] **ARCH-02**: Upstream file changes limited to single context wrapper in App.tsx
-- [ ] **ARCH-03**: Handler follows ExternalAnnotationHandler composition pattern
+- [x] **ARCH-03**: Handler follows ExternalAnnotationHandler composition pattern
 - [ ] **ARCH-04**: Fork can rebase on upstream main without merge conflicts in GitHub code
-- [ ] **ARCH-05**: Existing scattered GitHub code (OAuth, PR creation, ACL) extracted into plugin package
+- [x] **ARCH-05**: Existing scattered GitHub code (OAuth, PR creation, ACL) extracted into plugin package
 
 ### Authentication & Access Control
 
@@ -117,11 +117,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01 | Phase 1 | Pending |
+| ARCH-01 | Phase 1 | Complete |
 | ARCH-02 | Phase 1 | Pending |
-| ARCH-03 | Phase 1 | Pending |
+| ARCH-03 | Phase 1 | Complete |
 | ARCH-04 | Phase 1 | Pending |
-| ARCH-05 | Phase 1 | Pending |
+| ARCH-05 | Phase 1 | Complete |
 | AUTH-01 | Phase 2 | Pending |
 | AUTH-02 | Phase 2 | Pending |
 | AUTH-03 | Phase 2 | Pending |

@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Running `git diff upstream/main --name-only` shows no modified upstream files except App.tsx
 **Plans:** 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Create packages/github/ workspace package, extract server modules (handler, oauth, middleware, pr), consolidated types, tests
+- [x] 01-01-PLAN.md — Create packages/github/ workspace package, extract server modules (handler, oauth, middleware, pr), consolidated types, tests
 - [ ] 01-02-PLAN.md — Refactor paste-service handler to use middleware composition, update Bun/Cloudflare targets
 - [ ] 01-03-PLAN.md — Create GitHubProvider + useGitHub hook, move client utilities, wire App.tsx
 
