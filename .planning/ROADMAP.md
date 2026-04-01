@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 3 plans
 Plans:
 - [x] 01-01-PLAN.md — Create packages/github/ workspace package, extract server modules (handler, oauth, middleware, pr), consolidated types, tests
-- [ ] 01-02-PLAN.md — Refactor paste-service handler to use middleware composition, update Bun/Cloudflare targets
+- [x] 01-02-PLAN.md — Refactor paste-service handler to use middleware composition, update Bun/Cloudflare targets
 - [ ] 01-03-PLAN.md — Create GitHubProvider + useGitHub hook, move client utilities, wire App.tsx
 
 ### Phase 2: Authentication & Access Control
