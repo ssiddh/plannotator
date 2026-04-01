@@ -65,6 +65,7 @@ import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { useGitHubPRSync } from '@plannotator/ui/hooks/useGitHubPRSync';
 import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
+import { GitHubProvider } from '@plannotator/github/client';
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -1294,6 +1295,7 @@ const App: React.FC = () => {
 
 
   return (
+    <GitHubProvider>
     <ThemeProvider defaultTheme="dark">
       <div data-print-region="root" className="h-screen flex flex-col bg-background overflow-hidden">
         {/* Minimal Header */}
@@ -1966,6 +1968,7 @@ const App: React.FC = () => {
         />
       </div>
     </ThemeProvider>
+    </GitHubProvider>
   );
 };
 
