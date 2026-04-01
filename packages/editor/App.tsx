@@ -120,6 +120,43 @@ const App: React.FC = () => {
     document.title = repoInfo ? `${repoInfo.display} · Plannotator` : "Plannotator";
   }, [repoInfo]);
 
+  // Handle OAuth callback - extract token from URL hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#auth=')) {
+      try {
+        const fragment = hash.slice(6); // Remove '#auth='
+        const decoded = atob(fragment);
+        const data = JSON.parse(decoded);
+
+        if (data.token) {
+          // Store token in localStorage
+          storage.setItem('plannotator_github_token', data.token);
+          setGithubToken(data.token);
+
+          // Show success toast
+          setNoteSaveToast({ type: 'success', message: `Signed in as ${data.username}` });
+          setTimeout(() => setNoteSaveToast(null), 3000);
+
+          // Clear hash from URL
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      } catch (error) {
+        console.error('Failed to parse OAuth callback:', error);
+        setNoteSaveToast({ type: 'error', message: 'OAuth callback failed' });
+        setTimeout(() => setNoteSaveToast(null), 3000);
+      }
+    }
+
+    // Check for error in hash
+    if (hash.startsWith('#error=')) {
+      const error = hash.slice(7);
+      setNoteSaveToast({ type: 'error', message: `OAuth error: ${decodeURIComponent(error)}` });
+      setTimeout(() => setNoteSaveToast(null), 5000);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
   // Load GitHub token from localStorage (set during OAuth flow)
   useEffect(() => {
     const token = storage.getItem('plannotator_github_token');
