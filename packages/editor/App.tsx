@@ -112,7 +112,8 @@ const App: React.FC = () => {
   const [pasteApiUrl, setPasteApiUrl] = useState<string | undefined>(undefined);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
-  const [githubToken, setGithubToken] = useState<string | null>(null);
+  // Load GitHub token synchronously so useSharing can use it on first render
+  const [githubToken, setGithubToken] = useState<string | null>(() => storage.getItem('plannotator_github_token'));
   const [pasteId, setPasteId] = useState<string | null>(null);
   const [prMetadata, setPrMetadata] = useState<{ repo: string; pr_number: number; pr_url: string } | null>(null);
 
@@ -123,6 +124,12 @@ const App: React.FC = () => {
   // Handle OAuth callback - extract token from URL hash
   useEffect(() => {
     const hash = window.location.hash;
+
+    // Skip if hash is just the encryption key for a share
+    if (hash.startsWith('#key=')) {
+      return;
+    }
+
     if (hash.startsWith('#auth=')) {
       try {
         const fragment = hash.slice(6); // Remove '#auth='
@@ -154,14 +161,6 @@ const App: React.FC = () => {
       setNoteSaveToast({ type: 'error', message: `OAuth error: ${decodeURIComponent(error)}` });
       setTimeout(() => setNoteSaveToast(null), 5000);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-  }, []);
-
-  // Load GitHub token from localStorage (set during OAuth flow)
-  useEffect(() => {
-    const token = storage.getItem('plannotator_github_token');
-    if (token) {
-      setGithubToken(token);
     }
   }, []);
 
