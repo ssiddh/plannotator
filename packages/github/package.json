@@ -1,0 +1,14 @@
+{
+  "name": "@plannotator/github",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./server": "./server/handler.ts",
+    "./server/middleware": "./server/middleware.ts",
+    "./server/oauth": "./server/oauth.ts",
+    "./server/pr": "./server/pr.ts",
+    "./client": "./client/GitHubProvider.tsx",
+    "./client/lineMapper": "./client/lineMapper.ts",
+    "./types": "./shared/types.ts"
+  }
+}
