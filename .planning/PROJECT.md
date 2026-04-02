@@ -12,7 +12,9 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 
 ### Validated
 
-(None yet — this is new work on a fork)
+- [x] All GitHub-specific code lives in a plugin architecture (minimal core changes) — Validated in Phase 1: Plugin Architecture
+- [x] Fork can rebase on upstream Plannotator without breaking GitHub features — Validated in Phase 1: Plugin Architecture
+- [x] Existing OAuth/PR/ACL code refactored into plugin structure — Validated in Phase 1: Plugin Architecture
 
 ### Active
 
@@ -23,9 +25,6 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 - [ ] Discussion threads in GitHub display with all replies in Plannotator
 - [ ] Plan author can create summary annotations in Plannotator
 - [ ] Summary annotations resolve the associated GitHub thread when synced
-- [ ] All GitHub-specific code lives in a plugin architecture (minimal core changes)
-- [ ] Fork can rebase on upstream Plannotator without breaking GitHub features
-- [ ] Existing OAuth/PR/ACL code refactored into plugin structure
 
 ### Out of Scope
 
@@ -37,15 +36,11 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 
 ## Context
 
-This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotator). The fork needs to stay synchronized with upstream via regular rebasing. Current fork changes include:
+This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotator). The fork needs to stay synchronized with upstream via regular rebasing.
 
-- GitHub OAuth implementation in paste service
-- PR creation endpoint (`/api/pr/create`)
-- ACL metadata storage for private shares
-- PR metadata storage (KV/filesystem)
-- GitHub token validation
+**Phase 1 complete:** Plugin architecture established. All GitHub code now lives in isolated `packages/github/` workspace package with server (handler, OAuth, middleware, PR logic), client (GitHubProvider, hooks), and shared (types) modules. Paste-service refactored to use middleware composition. Single upstream modification: App.tsx wrapper. Build configuration fixed for hook distribution.
 
-The sync feature (bidirectional annotation ↔ comment) is entirely new. The plugin refactoring will extract existing GitHub code into a modular structure that minimizes the diff with upstream.
+The sync feature (bidirectional annotation ↔ comment) is the next focus.
 
 **Workflow:**
 1. User reviews plan in Plannotator, adds annotations
@@ -100,4 +95,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-01 after initialization*
+*Last updated: 2026-04-02 after Phase 1 completion*
