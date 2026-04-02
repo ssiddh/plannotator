@@ -98,13 +98,13 @@ These copy strings are defined now so downstream phases (5, 6, 7) can render the
 |---------|------|---------|
 | Drift warning heading | "Plan changed since PR creation" | Banner shown when plan hash mismatch detected (D-09) |
 | Drift warning body | "Line numbers may be incorrect. Annotations might not land on the expected lines." | Follows heading in warning banner |
-| Drift warning CTA (proceed) | "Sync anyway" | Allows user to continue despite drift |
-| Drift warning CTA (cancel) | "Cancel" | Aborts sync operation |
+| Drift warning CTA (proceed) | "Sync anyway" | Allows user to continue despite drift. Confirmation: warning banner shows both options ("Sync anyway" and "Don't sync") visible simultaneously -- no modal, user must click an explicit choice to proceed |
+| Drift warning CTA (cancel) | "Don't sync" | Aborts sync operation |
 | Conflict heading | "Annotation changed in both places" | Modal shown when both sides modified since last sync (D-12) |
 | Conflict body | "This annotation was modified locally and on GitHub since the last sync." | Explains the conflict situation |
 | Conflict CTA (keep local) | "Keep local" | Preserves Plannotator version, skips GitHub import |
-| Conflict CTA (keep remote) | "Keep GitHub" | Overwrites local with GitHub comment content |
-| Conflict CTA (cancel) | "Cancel sync" | Aborts entire sync operation |
+| Conflict CTA (keep remote) | "Keep GitHub" | Overwrites local with GitHub comment content. Confirmation: modal dialog shows side-by-side comparison of local vs GitHub text before user commits to choice -- modal cannot be dismissed without selecting an option |
+| Conflict CTA (cancel) | "Don't sync" | Aborts entire sync operation |
 | Empty state (no sync history) | "No sync history" | Shown when paste has never been synced |
 | Empty state body | "Sync annotations with a linked GitHub PR to see history here." | Guides user toward first sync |
 | Error: hash generation failed | "Could not generate annotation ID" | Fallback when SHA-256 fails (extremely unlikely) |
@@ -121,10 +121,11 @@ Phase 3 does not build UI but defines data contracts that constrain how downstre
 | Property | Contract |
 |----------|----------|
 | Trigger | `currentPlanHash !== storedPlanHash` (SHA-256 comparison) |
-| Presentation | Non-blocking banner at top of annotation panel |
-| User actions | "Sync anyway" (proceed) or "Cancel" (abort) |
+| Presentation | Non-blocking warning banner at top of annotation panel |
+| User actions | "Sync anyway" (proceed) or "Don't sync" (abort) -- both visible simultaneously, no modal |
+| Confirmation | Banner shows both options side-by-side; user must click an explicit choice. No default action, no auto-dismiss. |
 | Blocking | Does NOT block sync -- user decides |
-| Dismissible | Yes, via Cancel or by proceeding |
+| Dismissible | Yes, via "Don't sync" or by proceeding with "Sync anyway" |
 
 ### Conflict Resolution (D-12)
 
@@ -132,9 +133,10 @@ Phase 3 does not build UI but defines data contracts that constrain how downstre
 |----------|----------|
 | Trigger | `annotation.createdA > lastSyncTimestamp AND comment.updated_at > lastSyncTimestamp` |
 | Presentation | Modal dialog (per CONTEXT.md specifics section) |
-| User actions | "Keep local" / "Keep GitHub" / "Cancel sync" |
+| User actions | "Keep local" / "Keep GitHub" / "Don't sync" |
+| Confirmation | Modal displays side-by-side comparison of local annotation text vs GitHub comment text. "Keep GitHub" (destructive -- overwrites local work) requires user to see the comparison before committing. Modal cannot be dismissed without selecting one of the three options. |
 | Blocking | Yes -- blocks sync until each conflict is resolved |
-| Data shown | Local annotation text vs GitHub comment text (side-by-side or stacked) |
+| Data shown | Local annotation text vs GitHub comment text (side-by-side) |
 | Multiple conflicts | Presented one at a time, sequentially |
 
 ### Stable ID Behavior
