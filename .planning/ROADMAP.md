@@ -66,7 +66,10 @@ Plans:
   3. The line mapper converts markdown line numbers to block ID + offset and back
   4. Sync metadata records the last sync timestamp and direction for a given paste/PR pair
   5. Conflict detection identifies when both Plannotator and GitHub modified the same annotation since last sync
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — Stable ID generation, shared sync types, copywriting constants
+- [ ] 03-02-PLAN.md — Bidirectional sync mappings, sync state tracking, conflict detection
 
 ### Phase 4: PR Creation & Export
 **Goal**: Users can create a GitHub PR from a plan, with annotations posted as the initial batch of review comments
@@ -128,7 +131,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Plugin Architecture | 3/4 | Complete    | 2026-04-02 |
 | 2. Authentication & Access Control | 3/3 | Complete   | 2026-04-02 |
-| 3. Data Model & Sync Infrastructure | 0/0 | Not started | - |
+| 3. Data Model & Sync Infrastructure | 0/2 | Planning complete | - |
 | 4. PR Creation & Export | 0/0 | Not started | - |
 | 5. Inbound Sync | 0/0 | Not started | - |
 | 6. Outbound Sync | 0/0 | Not started | - |
