@@ -27,9 +27,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **PR-01**: Existing PR creation functionality preserved (plan markdown → GitHub PR)
 - [x] **PR-02**: Annotations exported as initial PR review comments when creating PR
-- [ ] **PR-03**: Annotations mapped to markdown line numbers for line-level comments
-- [ ] **PR-04**: Batch review submission (single GitHub notification, not one per comment)
-- [ ] **PR-05**: DELETION annotations exported as GitHub code suggestions (```suggestion blocks)
+- [x] **PR-03**: Annotations mapped to markdown line numbers for line-level comments
+- [x] **PR-04**: Batch review submission (single GitHub notification, not one per comment)
+- [x] **PR-05**: DELETION annotations exported as GitHub code suggestions (```suggestion blocks)
 - [x] **PR-06**: PR metadata (repo, number, URL) stored and linked to paste ID
 
 ### Inbound Sync (GitHub → Plannotator)
@@ -134,9 +134,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-05 | Phase 3 | Complete |
 | PR-01 | Phase 4 | Pending |
 | PR-02 | Phase 4 | Complete |
-| PR-03 | Phase 4 | Pending |
-| PR-04 | Phase 4 | Pending |
-| PR-05 | Phase 4 | Pending |
+| PR-03 | Phase 4 | Complete |
+| PR-04 | Phase 4 | Complete |
+| PR-05 | Phase 4 | Complete |
 | PR-06 | Phase 4 | Complete |
 | SYNC-IN-01 | Phase 5 | Pending |
 | SYNC-IN-02 | Phase 5 | Pending |

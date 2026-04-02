@@ -83,7 +83,7 @@ Plans:
   5. The existing PR creation functionality works without regressions
 **Plans:** 4 plans
 Plans:
-- [ ] 04-00-PLAN.md — Wave 0: test skeleton files for export and planHash modules
+- [x] 04-00-PLAN.md — Wave 0: test skeleton files for export and planHash modules
 - [ ] 04-01-PLAN.md — Server export logic: batch review submission, annotation-to-comment mapping, rollback, plan hash, handler extension
 - [x] 04-02-PLAN.md — Client hooks: useGitHubExport with retry/error handling, GitHubProvider metadata hydration
 - [ ] 04-03-PLAN.md — UI: GitHub PR tab in ExportModal, toast action buttons, App.tsx wiring, end-to-end verification
