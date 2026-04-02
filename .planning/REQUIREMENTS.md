@@ -68,10 +68,10 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Data Model & Sync State
 
 - [x] **DATA-01**: Annotation IDs use stable generation (not ephemeral timestamps)
-- [ ] **DATA-02**: Bidirectional ID mapping stored (Plannotator annotation ID ↔ GitHub comment ID)
+- [x] **DATA-02**: Bidirectional ID mapping stored (Plannotator annotation ID ↔ GitHub comment ID)
 - [x] **DATA-03**: Line mapping reversible (markdown line → block ID + offset)
-- [ ] **DATA-04**: Sync metadata tracks last sync timestamp and direction
-- [ ] **DATA-05**: Conflict detection when both sides modified same annotation
+- [x] **DATA-04**: Sync metadata tracks last sync timestamp and direction
+- [x] **DATA-05**: Conflict detection when both sides modified same annotation
 
 ## v2 Requirements
 
@@ -128,10 +128,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-04 | Phase 2 | Complete |
 | AUTH-05 | Phase 2 | Complete |
 | DATA-01 | Phase 3 | Complete |
-| DATA-02 | Phase 3 | Pending |
+| DATA-02 | Phase 3 | Complete |
 | DATA-03 | Phase 3 | Complete |
-| DATA-04 | Phase 3 | Pending |
-| DATA-05 | Phase 3 | Pending |
+| DATA-04 | Phase 3 | Complete |
+| DATA-05 | Phase 3 | Complete |
 | PR-01 | Phase 4 | Pending |
 | PR-02 | Phase 4 | Pending |
 | PR-03 | Phase 4 | Pending |
