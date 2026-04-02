@@ -13,7 +13,7 @@ This roadmap transforms Plannotator into a bidirectional GitHub PR review tool. 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Plugin Architecture** - Extract GitHub code into isolated `packages/github/` with handler composition pattern (completed 2026-04-02)
-- [ ] **Phase 2: Authentication & Access Control** - GitHub auth gates private shares and PR operations through the plugin
+- [x] **Phase 2: Authentication & Access Control** - GitHub auth gates private shares and PR operations through the plugin (completed 2026-04-02)
 - [ ] **Phase 3: Data Model & Sync Infrastructure** - Stable IDs, bidirectional mapping, and sync state tracking
 - [ ] **Phase 4: PR Creation & Export** - Create GitHub PRs from plans with annotations as initial review comments
 - [ ] **Phase 5: Inbound Sync** - Import GitHub PR comments into Plannotator as positioned annotations
@@ -49,11 +49,11 @@ Plans:
   3. GitHub tokens are validated before any PR API call proceeds
   4. ACL checks verify users and teams against the GitHub API before granting share access
   5. The existing OAuth flow continues to work without regressions
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 02-01-PLAN.md — Server-side auth gate: HTML error pages for browser auth failures, content negotiation in paste GET handler
 - [x] 02-02-PLAN.md — OAuth return-to-URL: carry original share URL through login/callback, session-only cookies
-- [ ] 02-03-PLAN.md — GitHubProvider hydration: correct localStorage key, token validation on mount, end-to-end verification
+- [x] 02-03-PLAN.md — GitHubProvider hydration: correct localStorage key, token validation on mount, end-to-end verification
 **UI hint**: yes
 
 ### Phase 3: Data Model & Sync Infrastructure
@@ -127,7 +127,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Plugin Architecture | 3/4 | Complete    | 2026-04-02 |
-| 2. Authentication & Access Control | 0/3 | Planning complete | - |
+| 2. Authentication & Access Control | 3/3 | Complete   | 2026-04-02 |
 | 3. Data Model & Sync Infrastructure | 0/0 | Not started | - |
 | 4. PR Creation & Export | 0/0 | Not started | - |
 | 5. Inbound Sync | 0/0 | Not started | - |
