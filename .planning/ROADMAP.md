@@ -51,7 +51,7 @@ Plans:
   5. The existing OAuth flow continues to work without regressions
 **Plans:** 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Server-side auth gate: HTML error pages for browser auth failures, content negotiation in paste GET handler
+- [x] 02-01-PLAN.md — Server-side auth gate: HTML error pages for browser auth failures, content negotiation in paste GET handler
 - [ ] 02-02-PLAN.md — OAuth return-to-URL: carry original share URL through login/callback, session-only cookies
 - [ ] 02-03-PLAN.md — GitHubProvider hydration: correct localStorage key, token validation on mount, end-to-end verification
 **UI hint**: yes
