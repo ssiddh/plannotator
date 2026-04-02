@@ -75,3 +75,37 @@ export interface PRStorageAdapter {
   putPRMetadata(pasteId: string, metadata: PRMetadata): Promise<void>;
   getPRMetadata(pasteId: string): Promise<PRMetadata | null>;
 }
+
+// --- Sync infrastructure types (Phase 3: DATA-01 through DATA-05) ---
+
+/** Extended PR metadata with plan hash for drift detection (D-08) */
+export interface PRMetadataWithSync extends PRMetadata {
+  planHash: string; // SHA-256 of full plan markdown at PR creation time
+}
+
+/** Sync state for a paste-PR pair (D-10) */
+export interface SyncState {
+  lastSyncTimestamp: number; // milliseconds since epoch
+  lastSyncDirection: "inbound" | "outbound";
+}
+
+/** Bidirectional mapping between annotation ID and GitHub comment ID (D-05) */
+export interface SyncMapping {
+  annotationId: string;
+  commentId: string;
+  pasteId: string;
+}
+
+/** Conflict information when both sides modified since last sync (D-11, D-12) */
+export interface ConflictInfo {
+  annotationId: string;
+  commentId: string;
+  localText: string; // Current Plannotator annotation text
+  remoteText: string; // Current GitHub comment body
+  localModifiedAt: number; // Annotation createdA (milliseconds)
+  remoteModifiedAt: number; // GitHub comment updated_at (converted to ms)
+  lastSyncAt: number; // Last sync timestamp (milliseconds)
+}
+
+/** User's resolution choice for a conflict (D-12) */
+export type ConflictResolution = "keep-local" | "keep-remote" | "abort";
