@@ -15,10 +15,9 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 - [x] All GitHub-specific code lives in a plugin architecture (minimal core changes) — Validated in Phase 1: Plugin Architecture
 - [x] Fork can rebase on upstream Plannotator without breaking GitHub features — Validated in Phase 1: Plugin Architecture
 - [x] Existing OAuth/PR/ACL code refactored into plugin structure — Validated in Phase 1: Plugin Architecture
+- [x] Private shares require GitHub authentication to access — Validated in Phase 2: Authentication & Access Control
 
 ### Active
-
-- [ ] Private shares require GitHub authentication to access
 - [ ] Users can create GitHub PR from a plan with annotations as initial review comments
 - [ ] GitHub PR comments (including replies) sync into Plannotator as annotations
 - [ ] Plannotator annotations sync to GitHub as PR review comments (line-level)
@@ -39,6 +38,8 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotator). The fork needs to stay synchronized with upstream via regular rebasing.
 
 **Phase 1 complete:** Plugin architecture established. All GitHub code now lives in isolated `packages/github/` workspace package with server (handler, OAuth, middleware, PR logic), client (GitHubProvider, hooks), and shared (types) modules. Paste-service refactored to use middleware composition. Single upstream modification: App.tsx wrapper. Build configuration fixed for hook distribution.
+
+**Phase 2 complete:** Authentication & access control system fully operational. Server-side auth gates return HTML error pages to browsers and JSON to API clients. OAuth flow carries return-to URL for post-auth redirect. Session-only token cookies. All PR routes validate tokens via GitHub API with KV caching. GitHubProvider hydrates from correct localStorage key and validates on mount.
 
 The sync feature (bidirectional annotation ↔ comment) is the next focus.
 
@@ -95,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after Phase 1 completion*
+*Last updated: 2026-04-02 after Phase 2 completion*
