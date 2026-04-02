@@ -2,6 +2,7 @@ import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
 import type { PasteACL, PasteMetadata, PRMetadata } from "@plannotator/github/types";
 import { extractToken, validateGitHubToken, checkAccess } from "@plannotator/github/server/middleware";
+import { authRequiredHtml, sessionExpiredHtml, accessDeniedHtml } from "@plannotator/github/server/auth-page";
 import type { GitHubHandler } from "@plannotator/github/server";
 import { exportToPR } from "@plannotator/github/server/pr";
 import { handlePresenceStream, handleHeartbeat } from "../presence/handler";
@@ -346,14 +347,49 @@ export async function handleRequest(
     // Validate ACL
     const token = extractToken(request);
     let user;
+    let tokenValidationFailed = false;
     if (token) {
       const authResult = await validateGitHubToken(token, kv);
       user = authResult.user;
+      if (!authResult.valid) {
+        tokenValidationFailed = true;
+      }
     }
 
     const accessCheck = await checkAccess(metadata.acl, user, token, kv);
     if (!accessCheck.authorized) {
-      const status = token ? 403 : 401; // 403 if authenticated but not authorized, 401 if not authenticated
+      const acceptsHtml = request.headers.get("Accept")?.includes("text/html");
+
+      if (acceptsHtml) {
+        // Per D-01: server-side gate returns HTML, not plan content
+        const loginUrl = "/api/auth/github/login";
+        const returnTo = url.toString();
+
+        if (token && !tokenValidationFailed && user) {
+          // Token valid, user exists, but not on ACL whitelist -> 403
+          return new Response(accessDeniedHtml(), {
+            status: 403,
+            headers: { ...cors, "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
+        if (token && tokenValidationFailed) {
+          // Token present but validation failed -> session expired (D-11)
+          return new Response(sessionExpiredHtml(loginUrl, returnTo), {
+            status: 401,
+            headers: { ...cors, "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
+        // No token at all -> auth required
+        return new Response(authRequiredHtml(loginUrl, returnTo), {
+          status: 401,
+          headers: { ...cors, "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      // API clients get JSON (unchanged behavior)
+      const status = token && !tokenValidationFailed && user ? 403 : 401;
       return Response.json(
         { error: accessCheck.reason || "Access denied" },
         { status, headers: cors }
