@@ -16,6 +16,11 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 - [x] Fork can rebase on upstream Plannotator without breaking GitHub features — Validated in Phase 1: Plugin Architecture
 - [x] Existing OAuth/PR/ACL code refactored into plugin structure — Validated in Phase 1: Plugin Architecture
 - [x] Private shares require GitHub authentication to access — Validated in Phase 2: Authentication & Access Control
+- [x] Stable annotation IDs that persist across syncs — Validated in Phase 3: Data Model & Sync Infrastructure
+- [x] Bidirectional ID mapping between Plannotator and GitHub — Validated in Phase 3: Data Model & Sync Infrastructure
+- [x] Line mapping converts between markdown lines and annotation positions — Validated in Phase 3: Data Model & Sync Infrastructure
+- [x] Sync state tracking with timestamps and direction — Validated in Phase 3: Data Model & Sync Infrastructure
+- [x] Conflict detection when both sides modified annotations — Validated in Phase 3: Data Model & Sync Infrastructure
 
 ### Active
 - [ ] Users can create GitHub PR from a plan with annotations as initial review comments
@@ -41,7 +46,7 @@ This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotat
 
 **Phase 2 complete:** Authentication & access control system fully operational. Server-side auth gates return HTML error pages to browsers and JSON to API clients. OAuth flow carries return-to URL for post-auth redirect. Session-only token cookies. All PR routes validate tokens via GitHub API with KV caching. GitHubProvider hydrates from correct localStorage key and validates on mount.
 
-The sync feature (bidirectional annotation ↔ comment) is the next focus.
+**Phase 3 complete:** Data model and sync infrastructure established. SHA-256 stable ID generation (12-char hex) with collision resolution. Bidirectional KV mapping with O(1) lookups (annotation ID ↔ comment ID). Sync state tracking persists timestamps and direction. Conflict detection identifies when both sides modified annotations. Existing line mapper validated for bidirectional conversion. All foundation modules ready for PR creation and bidirectional sync.
 
 **Workflow:**
 1. User reviews plan in Plannotator, adds annotations
@@ -96,4 +101,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after Phase 2 completion*
+*Last updated: 2026-04-02 after Phase 3 completion*
