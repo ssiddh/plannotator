@@ -47,14 +47,22 @@ export function handleLogin(
   clientId: string,
   redirectUri: string
 ): Response {
-  const state = generateState();
+  const csrf = generateState();
   const scope = "repo read:user read:org"; // repo: create PRs, read:org: team membership
+
+  // Read return_to from query params (D-08: redirect back to original share URL after auth)
+  const requestUrl = new URL(request.url);
+  const returnTo = requestUrl.searchParams.get("return_to") || "";
+
+  // Encode {csrf, return_to} as base64 JSON in state (D-08)
+  const statePayload = JSON.stringify({ csrf, return_to: returnTo });
+  const stateValue = btoa(statePayload);
 
   const authUrl = new URL(GITHUB_OAUTH_AUTHORIZE);
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("scope", scope);
-  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("state", stateValue);
 
   // Store state in cookie for verification in callback
   const headers = new Headers();
@@ -65,7 +73,7 @@ export function handleLogin(
   const secureSetting = isSecure ? "Secure; " : "";
   headers.set(
     "Set-Cookie",
-    `oauth_state=${state}; Path=/; HttpOnly; ${secureSetting}SameSite=Lax; Max-Age=600`
+    `oauth_state=${stateValue}; Path=/; HttpOnly; ${secureSetting}SameSite=Lax; Max-Age=600`
   );
 
   return new Response(null, { status: 302, headers });
@@ -107,11 +115,33 @@ export async function handleCallback(
   const cookies = parseCookies(cookieHeader);
   const savedState = cookies.oauth_state;
 
-  if (!savedState || savedState !== state) {
-    return redirectToPortal(
-      portalUrl,
-      "error=invalid_state"
-    );
+  if (!savedState) {
+    return redirectToPortal(portalUrl, "error=invalid_state");
+  }
+
+  // Decode base64 JSON state to extract CSRF token and return_to URL (D-08)
+  let csrfToken: string;
+  let returnTo: string = "";
+  try {
+    const decoded = JSON.parse(atob(savedState));
+    csrfToken = decoded.csrf;
+    returnTo = decoded.return_to || "";
+  } catch {
+    // Backward compat: if savedState is not base64 JSON, treat as plain CSRF token
+    csrfToken = savedState;
+  }
+
+  // Decode the URL state param too (also base64 JSON)
+  let urlCsrf: string;
+  try {
+    const urlDecoded = JSON.parse(atob(state));
+    urlCsrf = urlDecoded.csrf;
+  } catch {
+    urlCsrf = state;
+  }
+
+  if (!csrfToken || csrfToken !== urlCsrf) {
+    return redirectToPortal(portalUrl, "error=invalid_state");
   }
 
   // Exchange code for access token
@@ -165,8 +195,7 @@ export async function handleCallback(
 
     const user = (await userResponse.json()) as GitHubUser;
 
-    // Success! Redirect to portal with token in URL fragment (not query param for security)
-    // Also set httpOnly cookie with refresh token if available
+    // Success! Redirect to return_to URL (D-08) or portal with token in URL fragment
     const headers = new Headers();
     const fragmentData = {
       token: accessToken,
@@ -174,13 +203,23 @@ export async function handleCallback(
       avatar: user.avatar_url,
     };
     const fragment = btoa(JSON.stringify(fragmentData));
-    const redirectUrl = `${portalUrl}#auth=${fragment}`;
+    // Use return_to URL if available, otherwise fall back to portalUrl
+    const redirectBase = returnTo || portalUrl;
+    const redirectUrl = `${redirectBase}#auth=${fragment}`;
     headers.set("Location", redirectUrl);
+
+    // Set session-only token cookie (D-04: httpOnly, no Max-Age = session cookie)
+    const isSecureRedirect = redirectUri.startsWith("https://");
+    const secureCookieSetting = isSecureRedirect ? "Secure; " : "";
+    headers.append(
+      "Set-Cookie",
+      `plannotator_token=${accessToken}; Path=/; HttpOnly; ${secureCookieSetting}SameSite=Lax`
+    );
 
     // Store refresh token in httpOnly cookie if provided
     if (tokenData.refresh_token) {
       const maxAge = tokenData.refresh_token_expires_in || 15780000; // ~6 months default
-      headers.set(
+      headers.append(
         "Set-Cookie",
         `refresh_token=${tokenData.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
       );
