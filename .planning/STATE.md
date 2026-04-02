@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-04-02T02:12:35.418Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-04-02T02:18:03.366Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 ## Current Position
 
 Phase: 02 (authentication-access-control) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -56,6 +56,7 @@ Progress: [###.......] 33%
 | Phase 01 P03 | 8min | 2 tasks | 8 files |
 | Phase 01-04 P04 | 2min | 2 tasks | 3 files |
 | Phase 02 P01 | 3min | 2 tasks | 4 files |
+| Phase 02 P02 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Recent decisions affecting current work:
 - [Phase 02]: Inline HTML with system-ui font stack for auth pages (no React/theme dependency)
 - [Phase 02]: Three-state auth failure: authRequired (no token), sessionExpired (invalid token), accessDenied (valid but not on ACL)
 - [Phase 02]: Content negotiation via Accept header: browsers get HTML, API clients get JSON
+- [Phase 02]: Base64 JSON encoding for OAuth state cookie (carries both CSRF and return_to)
+- [Phase 02]: Session-only token cookie with no Max-Age per D-04
+- [Phase 02]: validateGitHubToken(token, kv) guard pattern on all PR routes (AUTH-02)
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T02:12:35.416Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-04-02T02:18:03.363Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

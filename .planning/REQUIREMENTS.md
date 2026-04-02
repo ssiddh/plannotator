@@ -18,9 +18,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Authentication & Access Control
 
 - [x] **AUTH-01**: Private shares (ACL type "whitelist") enforce GitHub authentication before access
-- [ ] **AUTH-02**: GitHub tokens validated before any PR operations
+- [x] **AUTH-02**: GitHub tokens validated before any PR operations
 - [x] **AUTH-03**: ACL users and teams checked against GitHub API before granting access
-- [ ] **AUTH-04**: Existing OAuth flow preserved (no breaking changes)
+- [x] **AUTH-04**: Existing OAuth flow preserved (no breaking changes)
 - [x] **AUTH-05**: Unauthenticated users see auth-required error with login link
 
 ### PR Creation & Export
@@ -123,9 +123,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-04 | Phase 1 | Complete |
 | ARCH-05 | Phase 1 | Complete |
 | AUTH-01 | Phase 2 | Complete |
-| AUTH-02 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Complete |
 | AUTH-03 | Phase 2 | Complete |
-| AUTH-04 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Complete |
 | AUTH-05 | Phase 2 | Complete |
 | DATA-01 | Phase 3 | Pending |
 | DATA-02 | Phase 3 | Pending |
