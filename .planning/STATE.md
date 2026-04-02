@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-00-PLAN.md
-last_updated: "2026-04-02T20:28:39.001Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-04-02T20:34:46.553Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 ## Current Position
 
 Phase: 04 (pr-creation-export) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -62,6 +62,7 @@ Progress: [###.......] 33%
 | Phase 03 P02 | 2min | 2 tasks | 4 files |
 | Phase 04 P02 | 2min | 2 tasks | 2 files |
 | Phase 04 P00 | 1min | 1 tasks | 2 files |
+| Phase 04 P01 | 6min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase 03]: PRMetadataWithSync extends PRMetadata (not modifying original) for backward compatibility
 - [Phase 03]: SyncState and ConflictInfo types defined inline with TODO to import from shared/types.ts once Plan 01 completes
 - [Phase 04]: Export hook separate from context -- useGitHubExport called directly by UI, not through GitHubProvider createPR
+- [Phase 04]: submitBatchReview omits comments field when no line comments per GitHub API pitfall
+- [Phase 04]: Metadata endpoint unauthenticated with fallback chain: sync:pasteId:pr -> storage -> pr:pasteId
+- [Phase 04]: GLOBAL_COMMENT annotations collected into review body text, not line comments
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T20:28:38.998Z
-Stopped at: Completed 04-00-PLAN.md
+Last session: 2026-04-02T20:34:46.550Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

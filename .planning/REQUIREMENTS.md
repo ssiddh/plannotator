@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### PR Creation & Export
 
-- [ ] **PR-01**: Existing PR creation functionality preserved (plan markdown → GitHub PR)
+- [x] **PR-01**: Existing PR creation functionality preserved (plan markdown → GitHub PR)
 - [x] **PR-02**: Annotations exported as initial PR review comments when creating PR
 - [x] **PR-03**: Annotations mapped to markdown line numbers for line-level comments
 - [x] **PR-04**: Batch review submission (single GitHub notification, not one per comment)
@@ -132,7 +132,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 3 | Complete |
 | DATA-04 | Phase 3 | Complete |
 | DATA-05 | Phase 3 | Complete |
-| PR-01 | Phase 4 | Pending |
+| PR-01 | Phase 4 | Complete |
 | PR-02 | Phase 4 | Complete |
 | PR-03 | Phase 4 | Complete |
 | PR-04 | Phase 4 | Complete |
