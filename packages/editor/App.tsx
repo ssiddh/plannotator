@@ -64,8 +64,10 @@ import type { PlanDiffMode } from '@plannotator/ui/components/plan-diff/PlanDiff
 import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { useGitHubPRSync } from '@plannotator/ui/hooks/useGitHubPRSync';
+import { useGitHubPRExport } from '@plannotator/ui/hooks/useGitHubPRExport';
 import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
 import { GitHubProvider } from '@plannotator/github/client';
+import { generatePlanHash } from '@plannotator/github/shared/planHash';
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -504,6 +506,20 @@ const App: React.FC = () => {
 
     return [...local, ...externalAnnotations];
   }, [annotations, externalAnnotations, prAnnotations]);
+
+  // GitHub PR export hook
+  const githubPRExport = useGitHubPRExport({
+    pasteId: pasteId,
+    markdown,
+    annotations: allAnnotations,
+    blocks,
+    setToast: setNoteSaveToast,
+    pasteApiUrl,
+    githubToken,
+    prMetadata,
+    setPrMetadata,
+    generatePlanHash,
+  });
 
   // Plan diff state — memoize filtered annotation lists to avoid new references per render
   const diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
@@ -1295,7 +1311,7 @@ const App: React.FC = () => {
 
 
   return (
-    <GitHubProvider>
+    <GitHubProvider pasteId={pasteId}>
     <ThemeProvider defaultTheme="dark">
       <div data-print-region="root" className="h-screen flex flex-col bg-background overflow-hidden">
         {/* Minimal Header */}
@@ -1820,6 +1836,7 @@ const App: React.FC = () => {
           initialTab={initialExportTab}
           githubToken={githubToken}
           pasteApiUrl={pasteApiUrl}
+          {...githubPRExport}
         />
 
         {/* Import Modal */}
@@ -1921,12 +1938,20 @@ const App: React.FC = () => {
 
         {/* Save-to-notes toast */}
         {noteSaveToast && (
-          <div className={`fixed top-16 right-4 z-50 px-3 py-2 rounded-lg text-xs font-medium shadow-lg transition-opacity ${
+          <div className={`fixed top-16 right-4 z-50 px-3 py-2 rounded-lg text-xs font-medium shadow-lg transition-opacity flex items-center gap-2 ${
             noteSaveToast.type === 'success'
               ? 'bg-success/15 text-success border border-success/30'
               : 'bg-destructive/15 text-destructive border border-destructive/30'
           }`}>
             {noteSaveToast.message}
+            {noteSaveToast.action && (
+              <button
+                onClick={noteSaveToast.action.onClick}
+                className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-background border border-border hover:bg-muted transition-colors"
+              >
+                {noteSaveToast.action.label}
+              </button>
+            )}
           </div>
         )}
 
