@@ -20,8 +20,10 @@ import {
 } from "./oauth.ts";
 import { extractToken, validateGitHubToken } from "./middleware.ts";
 import { exportToPR, fetchPRComments } from "./pr.ts";
+import { exportPlanWithAnnotations } from "./export.ts";
 
 const PR_COMMENTS_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/comments$/;
+const PR_METADATA_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/metadata$/;
 
 /**
  * GitHubHandler interface matching ExternalAnnotationHandler pattern.
@@ -95,13 +97,24 @@ export function createGitHubHandler(
       // --- GitHub PR Routes ---
 
       if (url.pathname === "/api/pr/create" && req.method === "POST") {
-        let body: { pasteId?: string; planMarkdown?: string; defaultRepo?: string };
+        interface CreatePRBody {
+          pasteId?: string;
+          planMarkdown?: string;
+          defaultRepo?: string;
+          annotations?: Array<{
+            id: string;
+            blockId: string;
+            type: "DELETION" | "COMMENT" | "GLOBAL_COMMENT";
+            text?: string;
+            originalText: string;
+            images?: Array<{ path: string; name: string }>;
+          }>;
+          blocks?: Array<{ id: string; startLine: number }>;
+        }
+
+        let body: CreatePRBody;
         try {
-          body = (await req.json()) as {
-            pasteId?: string;
-            planMarkdown?: string;
-            defaultRepo?: string;
-          };
+          body = (await req.json()) as CreatePRBody;
         } catch {
           return Response.json(
             { error: "Invalid JSON body" },
@@ -135,6 +148,24 @@ export function createGitHubHandler(
         }
 
         try {
+          // When annotations and blocks are provided, use the full annotation export flow
+          if (body.annotations && body.blocks) {
+            const result = await exportPlanWithAnnotations(
+              body.pasteId,
+              body.planMarkdown,
+              body.annotations,
+              body.blocks,
+              token,
+              {
+                defaultRepo: body.defaultRepo || config.defaultRepo,
+                prBaseBranch: config.prBaseBranch,
+              },
+              kv
+            );
+            return Response.json(result, { status: 201 });
+          }
+
+          // PR-01 backward compatibility: no annotations, use plain exportToPR
           const prMetadata = await exportToPR(
             body.pasteId,
             body.planMarkdown,
@@ -224,6 +255,52 @@ export function createGitHubHandler(
             { status: 500 }
           );
         }
+      }
+
+      // --- PR Metadata Endpoint ---
+
+      const prMetadataMatch = url.pathname.match(PR_METADATA_PATTERN);
+      if (prMetadataMatch && req.method === "GET") {
+        const metadataPasteId = prMetadataMatch[1];
+
+        // No auth required for metadata read (public information)
+
+        // Try new D-09 key pattern first (from exportPlanWithAnnotations)
+        if (kv) {
+          const syncPrJson = await kv.get(`sync:${metadataPasteId}:pr`);
+          if (syncPrJson) {
+            try {
+              return Response.json(JSON.parse(syncPrJson));
+            } catch {
+              // Fall through to legacy lookup
+            }
+          }
+        }
+
+        // Fall back to storage adapter
+        if (storage) {
+          const prMeta = await storage.getPRMetadata(metadataPasteId);
+          if (prMeta) {
+            return Response.json(prMeta);
+          }
+        }
+
+        // Fall back to legacy KV key pattern
+        if (kv) {
+          const legacyJson = await kv.get(`pr:${metadataPasteId}`);
+          if (legacyJson) {
+            try {
+              return Response.json(JSON.parse(legacyJson));
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+
+        return Response.json(
+          { error: "No PR found for this paste" },
+          { status: 404 }
+        );
       }
 
       // Unknown route -- pass through
