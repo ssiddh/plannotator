@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@plannotator/editor": "workspace:*",
+    "@plannotator/github": "workspace:*",
     "@plannotator/server": "workspace:*",
     "@plannotator/shared": "workspace:*",
     "@plannotator/ui": "workspace:*",

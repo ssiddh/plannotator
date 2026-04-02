@@ -16,6 +16,7 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss(), devMockApi(), viteSingleFile()],
   resolve: {
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@plannotator/ui': path.resolve(__dirname, '../../packages/ui'),
