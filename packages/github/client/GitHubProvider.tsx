@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useMemo } from "react";
-import type { GitHubUser, PRMetadata } from "../shared/types.ts";
+import type { GitHubUser, PRMetadata, PRMetadataWithSync } from "../shared/types.ts";
 
 export interface GitHubContextValue {
   // Auth state (Phase 2 populates) -- per D-04: state includes isAuthenticated, user
@@ -8,7 +8,9 @@ export interface GitHubContextValue {
   token: string | null;
 
   // PR state (Phase 4 populates) -- per D-04: state includes prMetadata
-  prMetadata: PRMetadata | null;
+  prMetadata: PRMetadataWithSync | null;
+  setPrMetadata: (metadata: PRMetadataWithSync | null) => void;
+  pasteId: string | null;
 
   // Actions (stubs -- implemented in later phases) -- per D-04: actions include sync + createPR
   syncFromGitHub: () => Promise<void>;
@@ -18,7 +20,7 @@ export interface GitHubContextValue {
 
 export const GitHubContext = createContext<GitHubContextValue | null>(null);
 
-export function GitHubProvider({ children }: { children: React.ReactNode }) {
+export function GitHubProvider({ children, pasteId }: { children: React.ReactNode; pasteId?: string | null }) {
   // Per D-06: Read token from localStorage on mount
   // Per D-07: Provider reads localStorage, triggers re-renders on auth changes
   const [token, setToken] = useState<string | null>(() => {
@@ -29,7 +31,7 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [user, setUser] = useState<GitHubUser | null>(null);
-  const [prMetadata, setPrMetadata] = useState<PRMetadata | null>(null);
+  const [prMetadata, setPrMetadata] = useState<PRMetadataWithSync | null>(null);
 
   // Per D-09: Validate token on mount via /api/auth/token/validate
   // Per D-11: Clear state when token is invalid or expired
@@ -80,11 +82,35 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
     };
   }, [token]);
 
+  // Per D-12: Hydrate PR metadata from API when pasteId is available
+  useEffect(() => {
+    if (!pasteId) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/pr/${pasteId}/metadata`);
+        if (res.ok && !cancelled) {
+          const data = (await res.json()) as PRMetadataWithSync;
+          setPrMetadata(data);
+        }
+      } catch {
+        // Silently ignore -- PR metadata is optional
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pasteId]);
+
   const value = useMemo<GitHubContextValue>(() => ({
     isAuthenticated: token !== null && user !== null,
     user,
     token,
     prMetadata,
+    setPrMetadata,
+    pasteId: pasteId || null,
 
     // Stub actions -- log warnings pointing to the phase that implements them
     syncFromGitHub: async () => {
@@ -94,9 +120,9 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
       console.warn("[GitHubProvider] syncToGitHub not implemented (Phase 6)");
     },
     createPR: async () => {
-      console.warn("[GitHubProvider] createPR not implemented (Phase 4)");
+      console.warn("[GitHubProvider] createPR stub -- use useGitHubExport hook directly");
     },
-  }), [token, user, prMetadata]);
+  }), [token, user, prMetadata, setPrMetadata, pasteId]);
 
   // Per D-03, UI-SPEC: Provider MUST NOT render any visible DOM elements
   return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
