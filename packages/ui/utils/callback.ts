@@ -17,8 +17,9 @@ export interface CallbackConfig {
   token: string;
 }
 
-export interface ToastSuccess { readonly type: 'success'; readonly message: string }
-export interface ToastError   { readonly type: 'error';   readonly message: string }
+export interface ToastAction { readonly label: string; readonly onClick: () => void }
+export interface ToastSuccess { readonly type: 'success'; readonly message: string; readonly action?: ToastAction }
+export interface ToastError   { readonly type: 'error';   readonly message: string; readonly action?: ToastAction }
 export type ToastPayload = ToastSuccess | ToastError | null;
 
 /**

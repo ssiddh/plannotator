@@ -36,9 +36,27 @@ interface ExportModalProps {
   githubToken?: string | null;
   /** Paste service URL for creating authenticated shares */
   pasteApiUrl?: string;
+  /** PR metadata if PR already exists */
+  prMetadata?: { repo: string; pr_number: number; pr_url: string; planHash?: string } | null;
+  /** Whether user is authenticated with GitHub */
+  isGitHubAuthenticated?: boolean;
+  /** Export function from useGitHubPRExport hook */
+  onExportToPR?: () => Promise<void>;
+  /** Whether export is in progress */
+  isExporting?: boolean;
+  /** Current retry attempt (0 = not retrying) */
+  retryAttempt?: number;
+  /** Export error message */
+  exportError?: string | null;
+  /** Whether plan has changed since PR creation (drift) */
+  hasDrift?: boolean;
+  /** Whether any annotations have images (for warning) */
+  hasImageAnnotations?: boolean;
+  /** GitHub OAuth login URL */
+  githubLoginUrl?: string;
 }
 
-type Tab = 'share' | 'annotations' | 'notes';
+type Tab = 'share' | 'annotations' | 'notes' | 'github-pr';
 
 type SaveTarget = 'obsidian' | 'bear' | 'octarine';
 type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
@@ -61,6 +79,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   initialTab,
   githubToken,
   pasteApiUrl = 'http://localhost:19433',
+  prMetadata: ghPrMetadata,
+  isGitHubAuthenticated = false,
+  onExportToPR,
+  isExporting = false,
+  retryAttempt = 0,
+  exportError,
+  hasDrift = false,
+  hasImageAnnotations = false,
+  githubLoginUrl,
 }) => {
   const defaultTab = initialTab || (sharingEnabled ? 'share' : 'annotations');
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
@@ -323,6 +350,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   }`}
                 >
                   Notes
+                </button>
+              )}
+              {onExportToPR && (
+                <button
+                  onClick={() => setActiveTab('github-pr')}
+                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    activeTab === 'github-pr'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  GitHub PR
                 </button>
               )}
             </div>
@@ -742,6 +781,96 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     Save All
                   </button>
                 </div>
+              )}
+            </div>
+          ) : activeTab === 'github-pr' ? (
+            <div className="space-y-3">
+              {/* Not authenticated state */}
+              {!isGitHubAuthenticated ? (
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Sign in with GitHub to create pull requests.
+                  </p>
+                  <button
+                    onClick={() => { if (githubLoginUrl) window.location.href = githubLoginUrl; }}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                    Sign in with GitHub
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* PR exists -- show link */}
+                  {ghPrMetadata && (
+                    <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                      <span className="text-xs text-muted-foreground">Existing PR:</span>
+                      <a
+                        href={ghPrMetadata.pr_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline font-medium"
+                      >
+                        PR #{ghPrMetadata.pr_number}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Drift warning */}
+                  {hasDrift && (
+                    <div className="p-2 bg-warning/10 border border-warning/20 rounded-md flex items-start gap-2">
+                      <svg className="w-4 h-4 text-warning shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <p className="text-xs text-warning">
+                        Plan changed since PR was created -- line numbers may be incorrect
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Image annotations warning */}
+                  {hasImageAnnotations && (
+                    <p className="text-xs text-muted-foreground">
+                      Annotations with images will be exported as text only
+                    </p>
+                  )}
+
+                  {/* Annotation count */}
+                  {annotationCount > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {annotationCount} annotation{annotationCount !== 1 ? 's' : ''} will be exported as review comments
+                    </p>
+                  ) : (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">No annotations to export</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Add annotations to your plan, then export them as PR review comments.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Export error */}
+                  {exportError && (
+                    <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+                      <p className="text-xs text-destructive">{exportError}</p>
+                    </div>
+                  )}
+
+                  {/* Export button */}
+                  <button
+                    onClick={onExportToPR}
+                    disabled={isExporting || annotationCount === 0}
+                    className="w-full px-3 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isExporting
+                      ? retryAttempt > 0
+                        ? `Retrying... (attempt ${retryAttempt} of 3)`
+                        : 'Creating PR...'
+                      : 'Export to GitHub PR'}
+                  </button>
+                </>
               )}
             </div>
           ) : (
