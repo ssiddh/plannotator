@@ -125,6 +125,15 @@ export function createGitHubHandler(
           );
         }
 
+        // AUTH-02: Validate token via GitHub API (D-09: cached in KV with 5-min TTL per D-10)
+        const authResult = await validateGitHubToken(token, kv);
+        if (!authResult.valid) {
+          return Response.json(
+            { error: authResult.error || "Invalid or expired token" },
+            { status: 401 }
+          );
+        }
+
         try {
           const prMetadata = await exportToPR(
             body.pasteId,
@@ -165,6 +174,15 @@ export function createGitHubHandler(
         if (!token) {
           return Response.json(
             { error: "Authentication required to fetch PR comments" },
+            { status: 401 }
+          );
+        }
+
+        // AUTH-02: Validate token via GitHub API (D-09: cached in KV with 5-min TTL per D-10)
+        const authResult = await validateGitHubToken(token, kv);
+        if (!authResult.valid) {
+          return Response.json(
+            { error: authResult.error || "Invalid or expired token" },
             { status: 401 }
           );
         }
