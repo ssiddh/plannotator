@@ -81,8 +81,9 @@ Plans:
   3. DELETION annotations are exported as GitHub suggestion blocks (```suggestion format)
   4. PR metadata (repo, PR number, URL) is stored and linked to the paste ID
   5. The existing PR creation functionality works without regressions
-**Plans:** 3 plans
+**Plans:** 4 plans
 Plans:
+- [ ] 04-00-PLAN.md — Wave 0: test skeleton files for export and planHash modules
 - [ ] 04-01-PLAN.md — Server export logic: batch review submission, annotation-to-comment mapping, rollback, plan hash, handler extension
 - [ ] 04-02-PLAN.md — Client hooks: useGitHubExport with retry/error handling, GitHubProvider metadata hydration
 - [ ] 04-03-PLAN.md — UI: GitHub PR tab in ExportModal, toast action buttons, App.tsx wiring, end-to-end verification
@@ -136,7 +137,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Plugin Architecture | 3/4 | Complete    | 2026-04-02 |
 | 2. Authentication & Access Control | 3/3 | Complete   | 2026-04-02 |
 | 3. Data Model & Sync Infrastructure | 2/2 | In Progress|  |
-| 4. PR Creation & Export | 0/3 | Not started | - |
+| 4. PR Creation & Export | 0/4 | Not started | - |
 | 5. Inbound Sync | 0/0 | Not started | - |
 | 6. Outbound Sync | 0/0 | Not started | - |
 | 7. Thread Management & Resolution | 0/0 | Not started | - |

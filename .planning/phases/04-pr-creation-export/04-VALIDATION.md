@@ -2,7 +2,7 @@
 phase: 04
 slug: pr-creation-export
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-04-02
 ---
@@ -38,7 +38,8 @@ created: 2026-04-02
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 04-01-01 | 01 | 1 | PR-02, PR-03, PR-04, PR-05 | unit | `bun test packages/github/server/export.test.ts` | ❌ W0 | ⬜ pending |
+| 04-00-01 | 00 | 0 | PR-02, PR-03, PR-04, PR-05 | scaffold | `bun test packages/github/server/export.test.ts` | Created by 04-00 | ⬜ pending |
+| 04-01-01 | 01 | 1 | PR-02, PR-03, PR-04, PR-05 | unit | `bun test packages/github/server/export.test.ts` | ✅ (via 04-00) | ⬜ pending |
 | 04-01-02 | 01 | 1 | PR-01, PR-06 | unit | `bun test packages/github/server/handler.test.ts` | ✅ (extend) | ⬜ pending |
 | 04-02-01 | 02 | 1 | PR-02 | integration | Manual verify (client hook state) | N/A | ⬜ pending |
 | 04-02-02 | 02 | 1 | PR-06 | integration | Manual verify (metadata hydration) | N/A | ⬜ pending |
@@ -50,7 +51,7 @@ created: 2026-04-02
 
 ---
 
-## Wave 0 Requirements
+## Wave 0 Requirements (addressed by Plan 04-00)
 
 - [ ] `packages/github/server/export.test.ts` — unit tests for PR-02 (annotations as comments), PR-03 (line mapping), PR-04 (batch review), PR-05 (suggestion blocks)
 - [ ] Extend `packages/github/server/handler.test.ts` — unit tests for PR-06 (metadata storage via /api/pr/create)
