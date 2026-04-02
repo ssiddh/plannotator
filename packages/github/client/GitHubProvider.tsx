@@ -1,4 +1,4 @@
-import React, { createContext, useState, useMemo } from "react";
+import React, { createContext, useState, useEffect, useMemo } from "react";
 import type { GitHubUser, PRMetadata } from "../shared/types.ts";
 
 export interface GitHubContextValue {
@@ -23,13 +23,62 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
   // Per D-07: Provider reads localStorage, triggers re-renders on auth changes
   const [token, setToken] = useState<string | null>(() => {
     if (typeof localStorage !== "undefined") {
-      return localStorage.getItem("github_token");
+      return localStorage.getItem("plannotator_github_token");
     }
     return null;
   });
 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [prMetadata, setPrMetadata] = useState<PRMetadata | null>(null);
+
+  // Per D-09: Validate token on mount via /api/auth/token/validate
+  // Per D-11: Clear state when token is invalid or expired
+  // Per D-12: No proactive refresh, reactive handling only
+  useEffect(() => {
+    if (!token) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/token/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+
+        if (!res.ok) {
+          // Token invalid or expired (D-11)
+          if (!cancelled) {
+            localStorage.removeItem("plannotator_github_token");
+            setToken(null);
+            setUser(null);
+          }
+          return;
+        }
+
+        const data = (await res.json()) as {
+          valid: boolean;
+          user?: GitHubUser;
+        };
+        if (!cancelled && data.valid && data.user) {
+          setUser(data.user);
+        } else if (!cancelled) {
+          // Token reported as invalid
+          localStorage.removeItem("plannotator_github_token");
+          setToken(null);
+          setUser(null);
+        }
+      } catch {
+        // Network error -- don't clear token (might be offline)
+        // Per D-12: reactive handling only, no proactive refresh
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const value = useMemo<GitHubContextValue>(() => ({
     isAuthenticated: token !== null && user !== null,
