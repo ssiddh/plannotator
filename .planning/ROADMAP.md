@@ -37,7 +37,7 @@ Plans:
 - [x] 01-01-PLAN.md — Create packages/github/ workspace package, extract server modules (handler, oauth, middleware, pr), consolidated types, tests
 - [x] 01-02-PLAN.md — Refactor paste-service handler to use middleware composition, update Bun/Cloudflare targets
 - [x] 01-03-PLAN.md — Create GitHubProvider + useGitHub hook, move client utilities, wire App.tsx
-- [ ] 01-04-PLAN.md — Fix hook build React resolution, verify upstream modification surface (gap closure)
+- [x] 01-04-PLAN.md — Fix hook build React resolution, verify upstream modification surface (gap closure)
 
 ### Phase 2: Authentication & Access Control
 **Goal**: Users are securely authenticated via GitHub before accessing private shares or performing PR operations
