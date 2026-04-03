@@ -66,7 +66,7 @@ import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { useGitHubPRSync } from '@plannotator/github/client/useGitHubPRSync';
 import { useGitHubPRExport } from '@plannotator/ui/hooks/useGitHubPRExport';
 import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
-import { GitHubProvider } from '@plannotator/github/client';
+import { GitHubProvider } from '@plannotator/github/client/GitHubProvider';
 import { generatePlanHash } from '@plannotator/github/shared/planHash';
 
 type NoteAutoSaveResults = {
