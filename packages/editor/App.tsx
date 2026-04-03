@@ -13,7 +13,7 @@ import { AnnotationToolstrip } from '@plannotator/ui/components/AnnotationToolst
 import { TaterSpriteRunning } from '@plannotator/ui/components/TaterSpriteRunning';
 import { TaterSpritePullup } from '@plannotator/ui/components/TaterSpritePullup';
 import { Settings } from '@plannotator/ui/components/Settings';
-import { FeedbackButton, ApproveButton } from '@plannotator/ui/components/ToolbarButtons';
+import { FeedbackButton, ApproveButton, SyncButton } from '@plannotator/ui/components/ToolbarButtons';
 import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback, type ToastPayload } from '@plannotator/ui/utils/callback';
 import { useAgents } from '@plannotator/ui/hooks/useAgents';
@@ -63,7 +63,7 @@ import { PlanDiffViewer } from '@plannotator/ui/components/plan-diff/PlanDiffVie
 import type { PlanDiffMode } from '@plannotator/ui/components/plan-diff/PlanDiffModeSwitcher';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
-import { useGitHubPRSync } from '@plannotator/ui/hooks/useGitHubPRSync';
+import { useGitHubPRSync } from '@plannotator/github/client/useGitHubPRSync';
 import { useGitHubPRExport } from '@plannotator/ui/hooks/useGitHubPRExport';
 import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
 import { GitHubProvider } from '@plannotator/github/client';
@@ -476,6 +476,10 @@ const App: React.FC = () => {
   const {
     annotations: prAnnotations,
     isLoading: prLoading,
+    isSyncing,
+    newCommentCount,
+    syncFromGitHub,
+    lastSync: lastSyncTime,
     error: prError,
   } = useGitHubPRSync({
     pasteId: pasteId ?? '',
@@ -483,8 +487,55 @@ const App: React.FC = () => {
     blocks,
     token: githubToken,
     pasteServiceUrl: pasteApiUrl || 'http://localhost:19433',
+    pollInterval: 300000, // 5 minutes per D-05
     enabled: !!githubToken && !!prMetadata && !!pasteId,
+    onSyncComplete: (stats) => {
+      if (stats.new > 0) {
+        setNoteSaveToast({
+          type: 'success',
+          message: `Synced ${stats.new} comment${stats.new === 1 ? '' : 's'} from GitHub`,
+        });
+        setTimeout(() => setNoteSaveToast(null), 3000);
+      } else if (stats.updated > 0 || stats.deleted > 0) {
+        setNoteSaveToast({
+          type: 'success',
+          message: `Updated ${stats.updated} and removed ${stats.deleted} comment${stats.deleted === 1 ? '' : 's'}`,
+        });
+        setTimeout(() => setNoteSaveToast(null), 3000);
+      }
+    },
+    onError: (errorMsg, errorType) => {
+      if (errorType === 'token_expired') {
+        setNoteSaveToast({
+          type: 'error',
+          message: 'Session expired. Please sign in again.',
+        });
+        setTimeout(() => setNoteSaveToast(null), 5000);
+      } else if (errorType === 'rate_limit') {
+        const resetAt = errorMsg.split(':')[1];
+        const resetTime = resetAt
+          ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(parseInt(resetAt) * 1000))
+          : 'soon';
+        setNoteSaveToast({
+          type: 'error',
+          message: `Rate limit hit. Retrying at ${resetTime}`,
+        });
+        setTimeout(() => setNoteSaveToast(null), 5000);
+      } else {
+        setNoteSaveToast({
+          type: 'error',
+          message: 'Sync failed. Check your connection.',
+        });
+        setTimeout(() => setNoteSaveToast(null), 5000);
+      }
+    },
   });
+
+  // Register sync action with GitHubProvider for external callers
+  useEffect(() => {
+    // The GitHubProvider context is above us -- we need to register via the context
+    // For now, the sync hook manages its own polling and the SyncButton calls syncFromGitHub directly
+  }, [syncFromGitHub]);
 
   // Merge local + SSE annotations + PR annotations, deduping draft-restored externals against
   // live SSE versions. Prefer the SSE version when both exist (same source,
@@ -1435,6 +1486,16 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>}
+
+                {/* GitHub Sync Button -- per D-01: in toolbar next to approve/deny */}
+                {githubToken && prMetadata && (
+                  <SyncButton
+                    onClick={syncFromGitHub}
+                    disabled={!prMetadata}
+                    isLoading={isSyncing}
+                    newCount={newCommentCount}
+                  />
+                )}
 
                 <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
               </>
