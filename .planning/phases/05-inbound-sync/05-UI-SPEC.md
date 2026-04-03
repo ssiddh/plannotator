@@ -41,7 +41,7 @@ Declared values (must be multiples of 4):
 
 Exceptions:
 - Avatar size: 24px (D-07, inline with comment text)
-- Badge diameter: 18px (notification count badge on sync button)
+- Badge diameter: 16px (notification count badge on sync button)
 - Touch target minimum: 32px (toolbar buttons, consistent with existing `p-1.5` pattern)
 
 ---
@@ -51,11 +51,11 @@ Exceptions:
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px (`text-sm`) | 400 (normal) | 1.5 |
-| Label | 10px (`text-[10px]`) | 500 (medium, `font-mono`) | 1.4 |
+| Label | 10px (`text-[10px]`) | 600 (semibold, `font-mono`) | 1.4 |
 | Heading | 12px (`text-xs`) | 600 (semibold, `uppercase tracking-wider`) | 1.3 |
 | Timestamp | 12px (`text-xs`) | 400 (normal) | 1.4 |
 
-**Source:** Matches existing AnnotationPanel patterns — `text-xs font-semibold uppercase tracking-wider` for section headings, `text-[10px] font-mono` for count badges.
+**Source:** Matches existing AnnotationPanel patterns — `text-xs font-semibold uppercase tracking-wider` for section headings, `text-[10px] font-mono` for count badges. Label weight unified to semibold (600) for visual consistency with headings.
 
 ---
 
@@ -96,7 +96,7 @@ Additional semantic colors used:
 | Loading state | Icon rotates (`animate-spin`), label changes to "Syncing..." |
 | Padding | `p-1.5 md:px-2.5 md:py-1` (matches existing toolbar buttons) |
 | Border radius | `rounded-md` |
-| Font | `text-xs font-medium` |
+| Font | `text-xs font-semibold` |
 | Mobile | Icon-only (16x16 SVG); desktop shows "Sync" label |
 | Tooltip (disabled) | "Create a PR first to sync comments" (D-03) |
 
@@ -104,10 +104,10 @@ Additional semantic colors used:
 
 | Property | Value |
 |----------|-------|
-| Size | 18px diameter circle |
+| Size | 16px diameter circle |
 | Position | `absolute -top-1.5 -right-1.5` relative to button |
 | Background | `bg-accent` |
-| Text | `text-accent-foreground text-[10px] font-mono font-medium` |
+| Text | `text-accent-foreground text-[10px] font-mono font-semibold` |
 | Content | Number only (e.g., "5") when count <= 9; "9+" for 10+ |
 | Visibility | Hidden when count is 0 |
 | Animation | `animate-pulse` briefly on count change (150ms) |
@@ -131,8 +131,8 @@ Additional semantic colors used:
 | Property | Value |
 |----------|-------|
 | Avatar | 24px circle, `rounded-full`, `border-2 border-card` (D-07) |
-| Avatar fallback | First letter of username, `bg-muted text-muted-foreground text-[10px] font-medium`, centered |
-| Username | `text-xs font-medium text-foreground`, clickable link (D-10) |
+| Avatar fallback | First letter of username, `bg-muted text-muted-foreground text-[10px] font-semibold`, centered |
+| Username | `text-xs font-semibold text-foreground`, clickable link (D-10) |
 | Username hover | `underline text-primary cursor-pointer` |
 | Username click | `window.open(annotation.githubCommentUrl, '_blank')` |
 | Timestamp | `text-xs text-muted-foreground`, format: "Apr 3, 2:30 PM" (D-11) |
@@ -159,7 +159,7 @@ Additional semantic colors used:
 | Warning | Yellow left border (`border-l-4 border-warning`), icon: exclamation |
 | Error | Red left border (`border-l-4 border-destructive`), icon: X circle |
 | Auto-dismiss | 6 seconds for success/warning, persistent for error (manual dismiss) |
-| Retry button | On error toast: `text-xs font-medium text-accent underline cursor-pointer` |
+| Retry button | On error toast: `text-xs font-semibold text-accent underline cursor-pointer` |
 | Position | Bottom-right, stacked if multiple |
 
 ---
