@@ -39,6 +39,8 @@ export interface Annotation {
     parentIndex: number;
     textOffset: number;
   };
+  children?: Annotation[];        // Nested thread replies (D-04)
+  githubCommentUrl?: string;      // Link to GitHub comment (D-10)
 }
 
 export interface Block {

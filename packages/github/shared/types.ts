@@ -56,6 +56,40 @@ export interface PRComment {
   created_at: string;
   github_url: string;
   comment_type: "review" | "issue"; // Review comment vs issue comment
+  updated_at: string;             // ISO 8601 for edit detection (D-16)
+  in_reply_to_id?: string;        // Parent comment ID for threading (SYNC-IN-05)
+}
+
+/** Response from /api/pr/{pasteId}/sync/inbound */
+export interface InboundSyncResponse {
+  annotations: PRCommentForClient[];
+  deletedIds: string[];
+  stats: {
+    total: number;
+    new: number;
+    updated: number;
+    deleted: number;
+    skipped: number;
+  };
+  syncTimestamp: number;
+}
+
+/** Flat annotation data returned by server; client builds thread tree */
+export interface PRCommentForClient {
+  id: string;
+  githubCommentId: string;
+  blockId: string;
+  type: "COMMENT" | "GLOBAL_COMMENT";
+  text: string;
+  originalText: string;
+  author: string;
+  avatarUrl: string;
+  githubCommentUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  inReplyToId: string | null;
+  commentType: "review" | "issue";
+  line: number | null;
 }
 
 // --- Plugin config (replaces process.env references) ---
