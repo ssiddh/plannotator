@@ -99,7 +99,12 @@ Plans:
   3. Comment replies are grouped by thread and displayed in chronological order
   4. GitHub user avatars and usernames are visible on imported annotations
   5. Repeated sync does not create duplicate annotations (already-imported comment IDs are skipped)
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 05-01-PLAN.md — Type extensions + server-side inbound sync endpoint with pagination, deduplication, edit/delete detection
+- [ ] 05-02-PLAN.md — Client hook rewrite: useGitHubPRSync with Page Visibility polling, thread tree building, retry logic
+- [ ] 05-03-PLAN.md — UI components: SyncButton toolbar button with badge, AnnotationPanel threaded GitHub rendering
+- [ ] 05-04-PLAN.md — Wiring: App.tsx integration, annotation merging, toast notifications, end-to-end verification
 **UI hint**: yes
 
 ### Phase 6: Outbound Sync
@@ -138,6 +143,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Authentication & Access Control | 3/3 | Complete   | 2026-04-02 |
 | 3. Data Model & Sync Infrastructure | 2/2 | In Progress|  |
 | 4. PR Creation & Export | 0/4 | Not started | - |
-| 5. Inbound Sync | 0/0 | Not started | - |
+| 5. Inbound Sync | 0/4 | In Progress | - |
 | 6. Outbound Sync | 0/0 | Not started | - |
 | 7. Thread Management & Resolution | 0/0 | Not started | - |
