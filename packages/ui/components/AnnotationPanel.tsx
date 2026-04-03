@@ -135,6 +135,10 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
                 onSelect={() => onSelect(ann.id)}
                 onDelete={() => onDelete(ann.id)}
                 onEdit={onEdit ? (updates: Partial<Annotation>) => onEdit(ann.id, updates) : undefined}
+                selectedId={selectedId}
+                onSelectById={onSelect}
+                onDeleteById={onDelete}
+                onEditById={onEdit}
               />
             ))}
             {editorAnnotations && editorAnnotations.length > 0 && (
@@ -231,6 +235,18 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   return panel;
 };
 
+function formatAbsoluteTimestamp(isoStringOrMs: string | number): string {
+  const date = typeof isoStringOrMs === "number"
+    ? new Date(isoStringOrMs)
+    : new Date(isoStringOrMs);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function formatTimestamp(ts: number): string {
   const now = Date.now();
   const diff = now - ts;
@@ -253,7 +269,12 @@ const AnnotationCard: React.FC<{
   onSelect: () => void;
   onDelete: () => void;
   onEdit?: (updates: Partial<Annotation>) => void;
-}> = ({ annotation, isSelected, onSelect, onDelete, onEdit }) => {
+  depth?: number;
+  selectedId?: string | null;
+  onSelectById?: (id: string) => void;
+  onDeleteById?: (id: string) => void;
+  onEditById?: (id: string, updates: Partial<Annotation>) => void;
+}> = ({ annotation, isSelected, onSelect, onDelete, onEdit, depth = 0, selectedId, onSelectById, onDeleteById, onEditById }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(annotation.text || '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -357,21 +378,54 @@ const AnnotationCard: React.FC<{
         }
       `}
     >
-      {/* Author */}
-      {annotation.author && (
-        <div className={`flex items-center gap-1.5 text-[10px] font-mono truncate mb-1.5 ${isCurrentUser(annotation.author) ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
-          {/* GitHub Avatar if present */}
-          {annotation.source === 'github-pr' && annotation.images && annotation.images[0] ? (
+      {/* Author -- GitHub-enhanced row (D-07, D-10, D-11) */}
+      {annotation.source === 'github-pr' && annotation.author && (
+        <div className="flex items-center gap-2 mb-1.5">
+          {/* 24px avatar per D-07 */}
+          {annotation.images?.[0] ? (
             <img
               src={annotation.images[0].path}
               alt={`@${annotation.author}`}
-              className="w-4 h-4 rounded-full flex-shrink-0"
+              className="w-6 h-6 rounded-full border-2 border-card flex-shrink-0"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+                (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+              }}
             />
-          ) : (
-            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          )}
+          ) : null}
+          {/* Fallback initials (hidden unless img errors or no avatar) */}
+          <span className={`w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground flex-shrink-0 ${annotation.images?.[0] ? "hidden" : ""}`}>
+            {(annotation.author || "?")[0].toUpperCase()}
+          </span>
+          {/* Clickable username per D-10 */}
+          <span
+            className="text-xs font-semibold text-foreground hover:underline hover:text-primary cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (annotation.githubCommentUrl) {
+                window.open(annotation.githubCommentUrl, "_blank");
+              }
+            }}
+            title={annotation.githubCommentUrl ? `Open on GitHub` : undefined}
+          >
+            {annotation.author}
+          </span>
+          {/* Absolute timestamp per D-11 */}
+          <span className="text-xs text-muted-foreground">
+            {formatAbsoluteTimestamp(annotation.createdA)}
+          </span>
+          {/* Small GitHub icon per UI-SPEC */}
+          <svg className="w-3 h-3 text-muted-foreground flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </div>
+      )}
+      {/* Author -- standard row for non-GitHub annotations */}
+      {annotation.source !== 'github-pr' && annotation.author && (
+        <div className={`flex items-center gap-1.5 text-[10px] font-mono truncate mb-1.5 ${isCurrentUser(annotation.author) ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
           <span className="truncate">{annotation.author}{isCurrentUser(annotation.author) && ' (me)'}</span>
         </div>
       )}
@@ -408,28 +462,31 @@ const AnnotationCard: React.FC<{
             {formatTimestamp(annotation.createdA)}
           </span>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all">
-          {onEdit && annotation.type !== AnnotationType.DELETION && !isEditing && (
+        {/* Actions -- hidden for GitHub-sourced annotations (D-08: read-only) */}
+        {annotation.source !== 'github-pr' && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all">
+            {onEdit && annotation.type !== AnnotationType.DELETION && !isEditing && (
+              <button
+                onClick={handleStartEdit}
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                title="Edit annotation"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
             <button
-              onClick={handleStartEdit}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-              title="Edit annotation"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onDelete(); }}
+              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+              title="Delete annotation"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-          )}
-          <button
-            onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
-            title="Delete annotation"
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Global Comment - show text directly */}
@@ -517,8 +574,8 @@ const AnnotationCard: React.FC<{
         </>
       )}
 
-      {/* Attached Images */}
-      {annotation.images && annotation.images.length > 0 && (
+      {/* Attached Images -- skip for GitHub annotations (avatar stored as first image) */}
+      {annotation.images && annotation.images.length > 0 && annotation.source !== 'github-pr' && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {annotation.images.map((img, idx) => (
             <div key={idx} className="text-center">
@@ -529,6 +586,27 @@ const AnnotationCard: React.FC<{
               />
               <div className="text-[9px] text-muted-foreground truncate max-w-[3rem]" title={img.name}>{img.name}</div>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Threaded replies (D-04) */}
+      {annotation.children && annotation.children.length > 0 && (
+        <div className="mt-2 ml-6 pl-3 border-l border-border/50 space-y-1.5">
+          {annotation.children.map(child => (
+            <AnnotationCard
+              key={child.id}
+              annotation={child}
+              isSelected={selectedId === child.id}
+              onSelect={() => onSelectById?.(child.id)}
+              onDelete={() => onDeleteById?.(child.id)}
+              onEdit={onEditById ? (updates: Partial<Annotation>) => onEditById(child.id, updates) : undefined}
+              depth={Math.min((depth || 0) + 1, 3)}
+              selectedId={selectedId}
+              onSelectById={onSelectById}
+              onDeleteById={onDeleteById}
+              onEditById={onEditById}
+            />
           ))}
         </div>
       )}
