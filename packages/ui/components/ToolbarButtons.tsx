@@ -81,3 +81,75 @@ export const ApproveButton: React.FC<ApproveButtonProps> = ({
     <span className="hidden md:inline">{isLoading ? loadingLabel : label}</span>
   </button>
 );
+
+interface SyncButtonProps {
+  onClick: () => void;
+  disabled?: boolean;
+  isLoading?: boolean;
+  newCount?: number;
+  title?: string;
+  disabledTitle?: string;
+}
+
+export const SyncButton: React.FC<SyncButtonProps> = ({
+  onClick,
+  disabled = false,
+  isLoading = false,
+  newCount = 0,
+  title = "Sync from GitHub",
+  disabledTitle = "Create a PR first to sync comments",
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled || isLoading}
+    className={`relative p-1.5 md:px-2.5 md:py-1 rounded-md text-xs font-semibold transition-all ${
+      disabled
+        ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+        : "bg-accent/15 text-accent hover:bg-accent/25 border border-accent/30"
+    }`}
+    title={disabled ? disabledTitle : title}
+  >
+    {/* Sync icon - circular arrows, 16x16px, per UI-SPEC */}
+    <svg
+      className={`w-4 h-4 md:hidden ${isLoading ? "animate-spin" : ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+    <span className="hidden md:inline">
+      {isLoading ? (
+        <>
+          <svg
+            className="w-3.5 h-3.5 inline mr-1 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Syncing...
+        </>
+      ) : (
+        "Sync"
+      )}
+    </span>
+    {/* Badge -- per UI-SPEC: 16px circle, absolute positioned top-right */}
+    {newCount > 0 && !isLoading && (
+      <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 rounded-full bg-accent text-accent-foreground text-[10px] font-mono font-semibold px-0.5">
+        {newCount > 9 ? "9+" : newCount}
+      </span>
+    )}
+  </button>
+);
