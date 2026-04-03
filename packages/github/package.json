@@ -2,6 +2,9 @@
   "name": "@plannotator/github",
   "version": "0.0.1",
   "private": true,
+  "dependencies": {
+    "@plannotator/ui": "workspace:*"
+  },
   "peerDependencies": {
     "react": ">=18"
   },
@@ -13,7 +16,6 @@
     "./client": "./client/GitHubProvider.tsx",
     "./client/useGitHub": "./client/useGitHub.ts",
     "./client/lineMapper": "./client/lineMapper.ts",
-    "./shared/planHash": "./shared/planHash.ts",
     "./types": "./shared/types.ts"
   }
 }

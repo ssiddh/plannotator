@@ -34,12 +34,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Inbound Sync (GitHub → Plannotator)
 
-- [ ] **SYNC-IN-01**: User can trigger "Sync from GitHub" to import PR comments
+- [x] **SYNC-IN-01**: User can trigger "Sync from GitHub" to import PR comments
 - [x] **SYNC-IN-02**: Review comments (line-level) imported as annotations with correct block mapping
 - [x] **SYNC-IN-03**: Issue comments (general) imported as global annotations
 - [x] **SYNC-IN-04**: Comments from all pages fetched (handle 30+ comments via pagination)
-- [ ] **SYNC-IN-05**: Comment replies grouped by thread in Plannotator UI
-- [ ] **SYNC-IN-06**: Thread display shows all replies in chronological order
+- [x] **SYNC-IN-05**: Comment replies grouped by thread in Plannotator UI
+- [x] **SYNC-IN-06**: Thread display shows all replies in chronological order
 - [ ] **SYNC-IN-07**: GitHub user avatars displayed in annotation panel for imported comments
 - [x] **SYNC-IN-08**: Annotation source field tracks GitHub origin (`source: "github-pr"`)
 - [x] **SYNC-IN-09**: Duplicate comments prevented (skip already-imported comment IDs)
@@ -138,12 +138,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PR-04 | Phase 4 | Complete |
 | PR-05 | Phase 4 | Complete |
 | PR-06 | Phase 4 | Complete |
-| SYNC-IN-01 | Phase 5 | Pending |
+| SYNC-IN-01 | Phase 5 | Complete |
 | SYNC-IN-02 | Phase 5 | Complete |
 | SYNC-IN-03 | Phase 5 | Complete |
 | SYNC-IN-04 | Phase 5 | Complete |
-| SYNC-IN-05 | Phase 5 | Pending |
-| SYNC-IN-06 | Phase 5 | Pending |
+| SYNC-IN-05 | Phase 5 | Complete |
+| SYNC-IN-06 | Phase 5 | Complete |
 | SYNC-IN-07 | Phase 5 | Pending |
 | SYNC-IN-08 | Phase 5 | Complete |
 | SYNC-IN-09 | Phase 5 | Complete |
