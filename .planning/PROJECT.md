@@ -21,9 +21,9 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 - [x] Line mapping converts between markdown lines and annotation positions — Validated in Phase 3: Data Model & Sync Infrastructure
 - [x] Sync state tracking with timestamps and direction — Validated in Phase 3: Data Model & Sync Infrastructure
 - [x] Conflict detection when both sides modified annotations — Validated in Phase 3: Data Model & Sync Infrastructure
+- [x] Users can create GitHub PR from a plan with annotations as initial review comments — Validated in Phase 4: PR Creation & Export
 
 ### Active
-- [ ] Users can create GitHub PR from a plan with annotations as initial review comments
 - [ ] GitHub PR comments (including replies) sync into Plannotator as annotations
 - [ ] Plannotator annotations sync to GitHub as PR review comments (line-level)
 - [ ] Discussion threads in GitHub display with all replies in Plannotator
@@ -47,6 +47,8 @@ This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotat
 **Phase 2 complete:** Authentication & access control system fully operational. Server-side auth gates return HTML error pages to browsers and JSON to API clients. OAuth flow carries return-to URL for post-auth redirect. Session-only token cookies. All PR routes validate tokens via GitHub API with KV caching. GitHubProvider hydrates from correct localStorage key and validates on mount.
 
 **Phase 3 complete:** Data model and sync infrastructure established. SHA-256 stable ID generation (12-char hex) with collision resolution. Bidirectional KV mapping with O(1) lookups (annotation ID ↔ comment ID). Sync state tracking persists timestamps and direction. Conflict detection identifies when both sides modified annotations. Existing line mapper validated for bidirectional conversion. All foundation modules ready for PR creation and bidirectional sync.
+
+**Phase 4 complete:** PR creation and export functionality operational. Users can create GitHub PRs from plans via "Export to GitHub PR" button in ExportModal. Annotations are posted as initial batch review comments (single GitHub notification). DELETION annotations export as GitHub suggestion blocks. PR metadata (repo, number, URL, plan hash) is stored and linked to paste ID. Drift detection warns when plan hash differs from stored PR. Backward compatibility maintained — legacy exportToPR path preserved when annotations are absent.
 
 **Workflow:**
 1. User reviews plan in Plannotator, adds annotations
@@ -101,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after Phase 3 completion*
+*Last updated: 2026-04-03 after Phase 4 completion*
