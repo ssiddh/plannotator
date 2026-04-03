@@ -102,8 +102,8 @@ Plans:
 **Plans:** 1/5 plans executed
 Plans:
 - [x] 05-01-PLAN.md — Type extensions + server-side inbound sync endpoint with pagination, deduplication, edit/delete detection
-- [ ] 05-02-PLAN.md — Client hook rewrite: useGitHubPRSync with Page Visibility polling, thread tree building, retry logic
-- [ ] 05-03-PLAN.md — UI components: SyncButton toolbar button with badge, AnnotationPanel threaded GitHub rendering
+- [x] 05-02-PLAN.md — Client hook rewrite: useGitHubPRSync with Page Visibility polling, thread tree building, retry logic
+- [x] 05-03-PLAN.md — UI components: SyncButton toolbar button with badge, AnnotationPanel threaded GitHub rendering
 - [ ] 05-04-PLAN.md — Wiring: App.tsx integration, annotation merging, toast notifications, end-to-end verification
 **UI hint**: yes
 

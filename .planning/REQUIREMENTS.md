@@ -40,7 +40,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SYNC-IN-04**: Comments from all pages fetched (handle 30+ comments via pagination)
 - [x] **SYNC-IN-05**: Comment replies grouped by thread in Plannotator UI
 - [x] **SYNC-IN-06**: Thread display shows all replies in chronological order
-- [ ] **SYNC-IN-07**: GitHub user avatars displayed in annotation panel for imported comments
+- [x] **SYNC-IN-07**: GitHub user avatars displayed in annotation panel for imported comments
 - [x] **SYNC-IN-08**: Annotation source field tracks GitHub origin (`source: "github-pr"`)
 - [x] **SYNC-IN-09**: Duplicate comments prevented (skip already-imported comment IDs)
 
@@ -144,7 +144,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-IN-04 | Phase 5 | Complete |
 | SYNC-IN-05 | Phase 5 | Complete |
 | SYNC-IN-06 | Phase 5 | Complete |
-| SYNC-IN-07 | Phase 5 | Pending |
+| SYNC-IN-07 | Phase 5 | Complete |
 | SYNC-IN-08 | Phase 5 | Complete |
 | SYNC-IN-09 | Phase 5 | Complete |
 | SYNC-OUT-01 | Phase 6 | Pending |
