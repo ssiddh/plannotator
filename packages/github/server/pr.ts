@@ -141,76 +141,137 @@ export async function exportToPR(
 }
 
 /**
- * Fetch all comments (review + issue) from a GitHub PR.
+ * Fetch all pages from a paginated GitHub API endpoint.
+ * Uses raw fetch() instead of githubRequest() for header access and error handling.
+ */
+async function fetchAllPages(
+  baseUrl: string,
+  token: string,
+  since?: string,
+  perPage: number = 100
+): Promise<{ data: any[]; failedPages: number[] }> {
+  const allData: any[] = [];
+  const failedPages: number[] = [];
+  let page = 1;
+
+  while (true) {
+    let url = `${baseUrl}?per_page=${perPage}&page=${page}`;
+    if (since) {
+      url += `&since=${since}`;
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Plannotator-Paste-Service",
+      },
+    });
+
+    // Extract headers BEFORE checking response.ok
+    const linkHeader = response.headers.get("Link");
+    const rateLimitRemaining = response.headers.get("X-RateLimit-Remaining");
+    const rateLimitReset = response.headers.get("X-RateLimit-Reset");
+
+    // Now check status
+    if (response.status === 401) {
+      throw new Error("token_expired");
+    }
+    if (response.status === 403 && rateLimitRemaining === "0") {
+      throw new Error(`rate_limited:${rateLimitReset}`);
+    }
+    if (!response.ok) {
+      failedPages.push(page);
+      // If we had a successful prior page with a next link, continue
+      const hasNext = linkHeader?.includes('rel="next"') ?? false;
+      if (!hasNext && allData.length === 0) break;
+      page++;
+      continue;
+    }
+
+    // Parse body and check for next page
+    const data = await response.json();
+    allData.push(...(data as any[]));
+
+    const hasNext = linkHeader?.includes('rel="next"') ?? false;
+    if (!hasNext) break;
+    page++;
+  }
+
+  return { data: allData, failedPages };
+}
+
+/**
+ * Fetch all comments (review + issue) from a GitHub PR with pagination.
  */
 export async function fetchPRComments(
   prMetadata: PRMetadata,
-  token: string
-): Promise<PRComment[]> {
+  token: string,
+  options?: { since?: string; perPage?: number }
+): Promise<{ comments: PRComment[]; failedPages: number[] }> {
   const [owner, repoName] = prMetadata.repo.split("/");
+  const since = options?.since;
+  const perPage = options?.perPage ?? 100;
 
-  try {
-    // Fetch review comments (inline, with line numbers)
-    const reviewCommentsPromise = githubRequest(
-      `GET /repos/${owner}/${repoName}/pulls/${prMetadata.pr_number}/comments`,
-      token
-    );
+  const reviewUrl = `${GITHUB_API_BASE}/repos/${owner}/${repoName}/pulls/${prMetadata.pr_number}/comments`;
+  const issueUrl = `${GITHUB_API_BASE}/repos/${owner}/${repoName}/issues/${prMetadata.pr_number}/comments`;
 
-    // Fetch issue comments (general, no line numbers)
-    const issueCommentsPromise = githubRequest(
-      `GET /repos/${owner}/${repoName}/issues/${prMetadata.pr_number}/comments`,
-      token
-    );
+  // Fetch both in parallel with pagination
+  const [reviewResult, issueResult] = await Promise.all([
+    fetchAllPages(reviewUrl, token, since, perPage),
+    fetchAllPages(issueUrl, token, since, perPage),
+  ]);
 
-    const [reviewComments, issueComments] = await Promise.all([
-      reviewCommentsPromise,
-      issueCommentsPromise,
-    ]);
+  const allComments: PRComment[] = [];
+  const failedPages = [
+    ...reviewResult.failedPages,
+    ...issueResult.failedPages,
+  ];
 
-    const allComments: PRComment[] = [];
-
-    // Process review comments (have line numbers)
-    for (const comment of reviewComments as any[]) {
-      allComments.push({
-        id: `review_${comment.id}`,
-        author: {
-          username: comment.user.login,
-          avatar: comment.user.avatar_url,
-        },
-        body: comment.body,
-        line: comment.line || comment.original_line,
-        path: comment.path,
-        created_at: comment.created_at,
-        github_url: comment.html_url,
-        comment_type: "review",
-      });
-    }
-
-    // Process issue comments (general comments)
-    for (const comment of issueComments as any[]) {
-      allComments.push({
-        id: `issue_${comment.id}`,
-        author: {
-          username: comment.user.login,
-          avatar: comment.user.avatar_url,
-        },
-        body: comment.body,
-        created_at: comment.created_at,
-        github_url: comment.html_url,
-        comment_type: "issue",
-      });
-    }
-
-    // Sort by creation time
-    allComments.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-
-    return allComments;
-  } catch (error) {
-    throw new Error(`Failed to fetch PR comments: ${error}`);
+  // Process review comments (have line numbers)
+  for (const comment of reviewResult.data) {
+    allComments.push({
+      id: `review_${comment.id}`,
+      author: {
+        username: comment.user.login,
+        avatar: comment.user.avatar_url,
+      },
+      body: comment.body,
+      line: comment.line || comment.original_line,
+      path: comment.path,
+      created_at: comment.created_at,
+      github_url: comment.html_url,
+      comment_type: "review",
+      updated_at: comment.updated_at,
+      in_reply_to_id: comment.in_reply_to_id
+        ? `review_${comment.in_reply_to_id}`
+        : undefined,
+    });
   }
+
+  // Process issue comments (general comments)
+  for (const comment of issueResult.data) {
+    allComments.push({
+      id: `issue_${comment.id}`,
+      author: {
+        username: comment.user.login,
+        avatar: comment.user.avatar_url,
+      },
+      body: comment.body,
+      created_at: comment.created_at,
+      github_url: comment.html_url,
+      comment_type: "issue",
+      updated_at: comment.updated_at,
+    });
+  }
+
+  // Sort by creation time
+  allComments.sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  return { comments: allComments, failedPages };
 }
 
 /**

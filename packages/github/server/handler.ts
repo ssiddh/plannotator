@@ -242,7 +242,7 @@ export function createGitHubHandler(
         }
 
         try {
-          const comments = await fetchPRComments(prMetadata, token);
+          const { comments } = await fetchPRComments(prMetadata, token);
           return Response.json(comments);
         } catch (e) {
           return Response.json(
