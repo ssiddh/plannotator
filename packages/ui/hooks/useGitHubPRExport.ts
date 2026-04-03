@@ -111,8 +111,9 @@ export function useGitHubPRExport({
 
   // Internal export function with retry logic (mirrors useGitHubExport)
   const doExport = useCallback(
-    async (retryCount = 0): Promise<PRMetadataLike | null> => {
-      if (!pasteId || !markdown || !githubToken) return null;
+    async (retryCount = 0, effectivePasteId?: string): Promise<PRMetadataLike | null> => {
+      const pid = effectivePasteId || pasteId;
+      if (!pid || !markdown || !githubToken) return null;
 
       setIsExporting(true);
       setExportError(null);
@@ -125,7 +126,7 @@ export function useGitHubPRExport({
             Authorization: "Bearer " + githubToken,
           },
           body: JSON.stringify({
-            pasteId,
+            pasteId: pid,
             planMarkdown: markdown,
             annotations: annotations.map((a) => ({
               id: a.id,
@@ -151,7 +152,7 @@ export function useGitHubPRExport({
           retryRef.current = retryCount + 1;
           setRetryAttempt(retryCount + 1);
           await new Promise((r) => setTimeout(r, delay));
-          return doExport(retryCount + 1);
+          return doExport(retryCount + 1, pid);
         }
 
         // Auth expiry
@@ -187,7 +188,7 @@ export function useGitHubPRExport({
           retryRef.current = retryCount + 1;
           setRetryAttempt(retryCount + 1);
           await new Promise((r) => setTimeout(r, delay));
-          return doExport(retryCount + 1);
+          return doExport(retryCount + 1, pid);
         }
 
         setExportError("Network error. Please check your connection and try again.");
@@ -200,11 +201,53 @@ export function useGitHubPRExport({
     [pasteId, markdown, githubToken, annotations, blocks]
   );
 
+  // Create a paste if we don't have one yet (needed before PR export)
+  const ensurePasteId = useCallback(async (): Promise<string | null> => {
+    if (pasteId) return pasteId;
+    if (!markdown || !githubToken || !pasteApiUrl) return null;
+
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(markdown);
+      const base64Data = btoa(String.fromCharCode(...data));
+
+      const res = await fetch(`${pasteApiUrl}/api/paste`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${githubToken}`,
+        },
+        body: JSON.stringify({
+          data: base64Data,
+          acl: { type: "public" },
+        }),
+      });
+
+      if (res.ok) {
+        const result = (await res.json()) as { id: string };
+        return result.id;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [pasteId, markdown, githubToken, pasteApiUrl]);
+
   // Export handler with toast notifications
   const handleExportToPR = useCallback(async () => {
-    if (!pasteId || !markdown) return;
+    if (!markdown) return;
 
-    const result = await doExport();
+    // Ensure we have a paste ID (create one if needed)
+    const effectivePasteId = await ensurePasteId();
+    if (!effectivePasteId) {
+      setToast({
+        type: "error",
+        message: "Failed to create paste for PR export",
+      });
+      return;
+    }
+
+    const result = await doExport(0, effectivePasteId);
 
     if (result) {
       // Success
@@ -229,7 +272,7 @@ export function useGitHubPRExport({
         },
       });
     }
-  }, [pasteId, markdown, doExport, setPrMetadata, setToast]);
+  }, [markdown, ensurePasteId, doExport, setPrMetadata, setToast]);
 
   return {
     // Props for ExportModal (spread directly)
