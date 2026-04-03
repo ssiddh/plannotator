@@ -10,10 +10,13 @@ export interface GitHubContextValue {
   // PR state (Phase 4 populates) -- per D-04: state includes prMetadata
   prMetadata: PRMetadata | null;
 
-  // Actions (stubs -- implemented in later phases) -- per D-04: actions include sync + createPR
+  // Actions -- per D-04: actions include sync + createPR
   syncFromGitHub: () => Promise<void>;
   syncToGitHub: () => Promise<void>;
   createPR: () => Promise<void>;
+
+  // Sync registration -- App.tsx registers the hook's syncFromGitHub here
+  registerSyncAction: (fn: (() => Promise<void>) | null) => void;
 }
 
 export const GitHubContext = createContext<GitHubContextValue | null>(null);
@@ -30,6 +33,7 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [prMetadata, setPrMetadata] = useState<PRMetadata | null>(null);
+  const [syncAction, setSyncAction] = useState<(() => Promise<void>) | null>(null);
 
   const value = useMemo<GitHubContextValue>(() => ({
     isAuthenticated: token !== null && user !== null,
@@ -37,17 +41,20 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
     token,
     prMetadata,
 
-    // Stub actions -- log warnings pointing to the phase that implements them
-    syncFromGitHub: async () => {
-      console.warn("[GitHubProvider] syncFromGitHub not implemented (Phase 5)");
-    },
+    // syncFromGitHub delegates to registered action, or warns if not registered yet
+    syncFromGitHub: syncAction || (async () => {
+      console.warn("[GitHubProvider] syncFromGitHub not registered yet");
+    }),
     syncToGitHub: async () => {
       console.warn("[GitHubProvider] syncToGitHub not implemented (Phase 6)");
     },
     createPR: async () => {
       console.warn("[GitHubProvider] createPR not implemented (Phase 4)");
     },
-  }), [token, user, prMetadata]);
+
+    // App.tsx calls registerSyncAction(hook.syncFromGitHub) after initializing useGitHubPRSync
+    registerSyncAction: (fn) => setSyncAction(() => fn),
+  }), [token, user, prMetadata, syncAction]);
 
   // Per D-03, UI-SPEC: Provider MUST NOT render any visible DOM elements
   return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
