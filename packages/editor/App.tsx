@@ -13,7 +13,7 @@ import { AnnotationToolstrip } from '@plannotator/ui/components/AnnotationToolst
 import { TaterSpriteRunning } from '@plannotator/ui/components/TaterSpriteRunning';
 import { TaterSpritePullup } from '@plannotator/ui/components/TaterSpritePullup';
 import { Settings } from '@plannotator/ui/components/Settings';
-import { FeedbackButton, ApproveButton, SyncButton } from '@plannotator/ui/components/ToolbarButtons';
+import { FeedbackButton, ApproveButton, SyncButton, OutboundSyncButton } from '@plannotator/ui/components/ToolbarButtons';
 import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback, type ToastPayload } from '@plannotator/ui/utils/callback';
 import { useAgents } from '@plannotator/ui/hooks/useAgents';
@@ -64,6 +64,7 @@ import type { PlanDiffMode } from '@plannotator/ui/components/plan-diff/PlanDiff
 import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { useGitHubPRSync } from '@plannotator/github/client/useGitHubPRSync';
+import { useGitHubOutboundSync } from '@plannotator/github/client/useGitHubOutboundSync';
 import { useGitHubPRExport } from '@plannotator/ui/hooks/useGitHubPRExport';
 import { PresencePanel } from '@plannotator/ui/components/PresencePanel';
 import { GitHubProvider } from '@plannotator/github/client/GitHubProvider';
@@ -537,6 +538,100 @@ const App: React.FC = () => {
     // For now, the sync hook manages its own polling and the SyncButton calls syncFromGitHub directly
   }, [syncFromGitHub]);
 
+  // GitHub outbound sync: push local annotations to GitHub as PR review comments
+  const {
+    syncToGitHub,
+    isSyncing: isOutboundSyncing,
+    lastResult: outboundResult,
+  } = useGitHubOutboundSync({
+    pasteId: pasteId ?? '',
+    prMetadata: prMetadata as any, // PRMetadataWithSync extends PRMetadata
+    token: githubToken,
+    pasteServiceUrl: pasteApiUrl || 'http://localhost:19433',
+    onSyncComplete: (result) => {
+      // D-20: Success toast with stats
+      if (result.syncedCount > 0 || result.editCount > 0) {
+        if (result.syncedCount > 0 && result.editCount > 0) {
+          setNoteSaveToast({
+            type: 'success',
+            message: `Synced ${result.syncedCount + result.editCount} annotations (${result.syncedCount} new, ${result.editCount} updated)`,
+          });
+        } else if (result.syncedCount > 0) {
+          setNoteSaveToast({
+            type: 'success',
+            message: `Synced ${result.syncedCount} annotation${result.syncedCount === 1 ? '' : 's'} to GitHub`,
+          });
+        } else {
+          setNoteSaveToast({
+            type: 'success',
+            message: `Updated ${result.editCount} annotation${result.editCount === 1 ? '' : 's'} on GitHub`,
+          });
+        }
+        setTimeout(() => setNoteSaveToast(null), 6000);
+      } else if (result.skippedCount > 0) {
+        setNoteSaveToast({
+          type: 'success',
+          message: 'All annotations already synced',
+        });
+        setTimeout(() => setNoteSaveToast(null), 4000);
+      }
+
+      // D-07: Warning toast for images stripped
+      // D-19: Warning toast for globals skipped
+      if (result.warnings.length > 0) {
+        setTimeout(() => {
+          for (const warning of result.warnings) {
+            setNoteSaveToast({ type: 'error', message: warning });
+          }
+          setTimeout(() => setNoteSaveToast(null), 6000);
+        }, result.syncedCount > 0 || result.editCount > 0 ? 2000 : 0);
+      }
+
+      // D-05: Drift warning if plan changed since PR creation
+      if (result.hasDrift) {
+        setTimeout(() => {
+          setNoteSaveToast({
+            type: 'error',
+            message: 'Plan changed since PR creation — line numbers may be incorrect',
+          });
+          setTimeout(() => setNoteSaveToast(null), 8000);
+        }, result.warnings.length > 0 ? 4000 : 2000);
+      }
+    },
+    onError: (errorMsg, errorType) => {
+      if (errorType === 'token_expired') {
+        // D-14: Clear token, redirect to OAuth
+        storage.removeItem('plannotator_github_token');
+        setGithubToken(null);
+        setNoteSaveToast({
+          type: 'error',
+          message: 'Session expired. Please sign in again.',
+        });
+        setTimeout(() => setNoteSaveToast(null), 5000);
+      } else if (errorType === 'rate_limit') {
+        const resetAt = errorMsg.split(':')[1];
+        const resetTime = resetAt
+          ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(parseInt(resetAt) * 1000))
+          : 'soon';
+        setNoteSaveToast({
+          type: 'error',
+          message: `Rate limit hit. Retrying at ${resetTime}`,
+        });
+        setTimeout(() => setNoteSaveToast(null), 8000);
+      } else {
+        setNoteSaveToast({
+          type: 'error',
+          message: 'Sync failed. Check your connection.',
+          action: {
+            label: 'Retry',
+            onClick: () => handleOutboundSync(),
+          },
+        });
+        // D-21: Error toast persists until dismiss or retry — no auto-dismiss
+      }
+    },
+  });
+
   // Merge local + SSE annotations + PR annotations, deduping draft-restored externals against
   // live SSE versions. Prefer the SSE version when both exist (same source,
   // type, and originalText). This avoids the timing issues of an effect-based
@@ -557,6 +652,46 @@ const App: React.FC = () => {
 
     return [...local, ...externalAnnotations];
   }, [annotations, externalAnnotations, prAnnotations]);
+
+  // Outbound sync trigger — passes current annotations, blocks, and markdown
+  const handleOutboundSync = React.useCallback(async () => {
+    // Filter to only local annotations (exclude github-pr source annotations)
+    const localAnnotations = allAnnotations
+      .filter(a => a.source !== 'github-pr')
+      .map(a => ({
+        id: a.id,
+        blockId: a.blockId,
+        type: a.type as "DELETION" | "COMMENT" | "GLOBAL_COMMENT",
+        text: a.text,
+        originalText: a.originalText,
+        images: a.images,
+      }));
+    await syncToGitHub(localAnnotations, blocks.map(b => ({ id: b.id, startLine: b.startLine })), markdown);
+  }, [syncToGitHub, allAnnotations, blocks, markdown]);
+
+  // Badge count: track synced annotation IDs to compute unsynced count (D-09)
+  const [syncedAnnotationIds, setSyncedAnnotationIds] = useState<Set<string>>(new Set());
+
+  // Update synced IDs after successful outbound sync
+  useEffect(() => {
+    if (outboundResult && (outboundResult.syncedCount > 0 || outboundResult.editCount > 0)) {
+      setSyncedAnnotationIds(prev => {
+        const next = new Set(prev);
+        allAnnotations
+          .filter(a => a.source !== 'github-pr' && a.type !== 'GLOBAL_COMMENT')
+          .forEach(a => next.add(a.id));
+        return next;
+      });
+    }
+  }, [outboundResult]);
+
+  const unsyncedCount = useMemo(() => {
+    return allAnnotations.filter(a =>
+      a.source !== 'github-pr' &&
+      a.type !== 'GLOBAL_COMMENT' &&
+      !syncedAnnotationIds.has(a.id)
+    ).length;
+  }, [allAnnotations, syncedAnnotationIds]);
 
   // GitHub PR export hook
   const githubPRExport = useGitHubPRExport({
@@ -1487,14 +1622,24 @@ const App: React.FC = () => {
                   )}
                 </div>}
 
-                {/* GitHub Sync Button -- per D-01: in toolbar next to approve/deny */}
-                {githubToken && prMetadata && (
-                  <SyncButton
-                    onClick={syncFromGitHub}
-                    disabled={!prMetadata}
-                    isLoading={isSyncing}
-                    newCount={newCommentCount}
-                  />
+                {/* GitHub Sync Buttons -- D-08: two separate buttons, adjacent */}
+                {githubToken && (
+                  <>
+                    {prMetadata && (
+                      <SyncButton
+                        onClick={syncFromGitHub}
+                        disabled={!prMetadata}
+                        isLoading={isSyncing}
+                        newCount={newCommentCount}
+                      />
+                    )}
+                    <OutboundSyncButton
+                      onClick={handleOutboundSync}
+                      disabled={!prMetadata}
+                      isLoading={isOutboundSyncing}
+                      unsyncedCount={prMetadata ? unsyncedCount : 0}
+                    />
+                  </>
                 )}
 
                 <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
