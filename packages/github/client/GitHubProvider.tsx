@@ -15,8 +15,9 @@ export interface GitHubContextValue {
   syncToGitHub: () => Promise<void>;
   createPR: () => Promise<void>;
 
-  // Sync registration -- App.tsx registers the hook's syncFromGitHub here
+  // Sync registration -- App.tsx registers the hook's sync actions here
   registerSyncAction: (fn: (() => Promise<void>) | null) => void;
+  registerOutboundSyncAction: (fn: (() => Promise<void>) | null) => void;
 }
 
 export const GitHubContext = createContext<GitHubContextValue | null>(null);
@@ -34,6 +35,7 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [prMetadata, setPrMetadata] = useState<PRMetadata | null>(null);
   const [syncAction, setSyncAction] = useState<(() => Promise<void>) | null>(null);
+  const [outboundSyncAction, setOutboundSyncAction] = useState<(() => Promise<void>) | null>(null);
 
   const value = useMemo<GitHubContextValue>(() => ({
     isAuthenticated: token !== null && user !== null,
@@ -45,16 +47,17 @@ export function GitHubProvider({ children }: { children: React.ReactNode }) {
     syncFromGitHub: syncAction || (async () => {
       console.warn("[GitHubProvider] syncFromGitHub not registered yet");
     }),
-    syncToGitHub: async () => {
-      console.warn("[GitHubProvider] syncToGitHub not implemented (Phase 6)");
-    },
+    syncToGitHub: outboundSyncAction || (async () => {
+      console.warn("[GitHubProvider] syncToGitHub not registered yet");
+    }),
     createPR: async () => {
       console.warn("[GitHubProvider] createPR not implemented (Phase 4)");
     },
 
     // App.tsx calls registerSyncAction(hook.syncFromGitHub) after initializing useGitHubPRSync
     registerSyncAction: (fn) => setSyncAction(() => fn),
-  }), [token, user, prMetadata, syncAction]);
+    registerOutboundSyncAction: (fn) => setOutboundSyncAction(() => fn),
+  }), [token, user, prMetadata, syncAction, outboundSyncAction]);
 
   // Per D-03, UI-SPEC: Provider MUST NOT render any visible DOM elements
   return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
