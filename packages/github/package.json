@@ -14,8 +14,12 @@
     "./server/oauth": "./server/oauth.ts",
     "./server/pr": "./server/pr.ts",
     "./client": "./client/GitHubProvider.tsx",
+    "./client/GitHubProvider": "./client/GitHubProvider.tsx",
     "./client/useGitHub": "./client/useGitHub.ts",
+    "./client/useGitHubPRSync": "./client/useGitHubPRSync.ts",
+    "./client/useGitHubOutboundSync": "./client/useGitHubOutboundSync.ts",
     "./client/lineMapper": "./client/lineMapper.ts",
+    "./shared/planHash": "./shared/planHash.ts",
     "./types": "./shared/types.ts"
   }
 }
