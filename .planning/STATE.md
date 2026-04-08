@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-04-08T21:31:16.863Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-04-08T21:35:38.323Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 ## Current Position
 
 Phase: 06 (outbound-sync) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-08
 
@@ -70,6 +70,7 @@ Progress: [###.......] 33%
 | Phase 05 P03 | 3min | 2 tasks | 3 files |
 | Phase 05 P04 | 6min | 2 tasks | 3 files |
 | Phase 06 P01 | 3min | 2 tasks | 2 files |
+| Phase 06 P02 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Vite alias @plannotator/github/client changed from single-file to directory mapping for subpath imports
 - [Phase 06]: Positional matching for comment ID recovery from review API response
 - [Phase 06]: Edit comparison uses expected body format: suggestion blocks for DELETION, plain text for COMMENT
+- [Phase 06]: Outbound sync route uses POST method (sends annotations/blocks/planMarkdown in body)
+- [Phase 06]: 401 handler clears localStorage token per D-14; no auto-retry on 401 or 429
 
 ### Pending Todos
 
@@ -132,6 +135,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T21:31:16.860Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-04-08T21:35:38.321Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
