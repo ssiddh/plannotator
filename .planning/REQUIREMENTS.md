@@ -46,14 +46,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Outbound Sync (Plannotator → GitHub)
 
-- [ ] **SYNC-OUT-01**: User can trigger "Sync to GitHub" to export annotations as PR comments
-- [ ] **SYNC-OUT-02**: New annotations posted as PR review comments on correct lines
-- [ ] **SYNC-OUT-03**: Stable annotation IDs prevent duplicate comments on repeated sync
-- [ ] **SYNC-OUT-04**: Line mapping detects when plan changed since PR creation
-- [ ] **SYNC-OUT-05**: Drift warning shown when markdown structure changed (unmappable annotations)
-- [ ] **SYNC-OUT-06**: DELETION annotations converted to GitHub suggestion code blocks
-- [ ] **SYNC-OUT-07**: Batch review submission for outbound annotations (single notification)
-- [ ] **SYNC-OUT-08**: Annotations with images include image references in GitHub comment body
+- [x] **SYNC-OUT-01**: User can trigger "Sync to GitHub" to export annotations as PR comments
+- [x] **SYNC-OUT-02**: New annotations posted as PR review comments on correct lines
+- [x] **SYNC-OUT-03**: Stable annotation IDs prevent duplicate comments on repeated sync
+- [x] **SYNC-OUT-04**: Line mapping detects when plan changed since PR creation
+- [x] **SYNC-OUT-05**: Drift warning shown when markdown structure changed (unmappable annotations)
+- [x] **SYNC-OUT-06**: DELETION annotations converted to GitHub suggestion code blocks
+- [x] **SYNC-OUT-07**: Batch review submission for outbound annotations (single notification)
+- [x] **SYNC-OUT-08**: Annotations with images include image references in GitHub comment body
 
 ### Thread Management & Resolution
 
@@ -147,14 +147,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-IN-07 | Phase 5 | Complete |
 | SYNC-IN-08 | Phase 5 | Complete |
 | SYNC-IN-09 | Phase 5 | Complete |
-| SYNC-OUT-01 | Phase 6 | Pending |
-| SYNC-OUT-02 | Phase 6 | Pending |
-| SYNC-OUT-03 | Phase 6 | Pending |
-| SYNC-OUT-04 | Phase 6 | Pending |
-| SYNC-OUT-05 | Phase 6 | Pending |
-| SYNC-OUT-06 | Phase 6 | Pending |
-| SYNC-OUT-07 | Phase 6 | Pending |
-| SYNC-OUT-08 | Phase 6 | Pending |
+| SYNC-OUT-01 | Phase 6 | Complete |
+| SYNC-OUT-02 | Phase 6 | Complete |
+| SYNC-OUT-03 | Phase 6 | Complete |
+| SYNC-OUT-04 | Phase 6 | Complete |
+| SYNC-OUT-05 | Phase 6 | Complete |
+| SYNC-OUT-06 | Phase 6 | Complete |
+| SYNC-OUT-07 | Phase 6 | Complete |
+| SYNC-OUT-08 | Phase 6 | Complete |
 | THREAD-01 | Phase 7 | Pending |
 | THREAD-02 | Phase 7 | Pending |
 | THREAD-03 | Phase 7 | Pending |
