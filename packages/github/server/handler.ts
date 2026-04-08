@@ -11,6 +11,7 @@ import type {
   GitHubConfig,
   PRStorageAdapter,
   PRMetadata,
+  PRMetadataWithSync,
 } from "../shared/types.ts";
 import {
   handleLogin,
@@ -22,11 +23,13 @@ import { extractToken, validateGitHubToken } from "./middleware.ts";
 import { exportToPR, fetchPRComments } from "./pr.ts";
 import { exportPlanWithAnnotations } from "./export.ts";
 import { performInboundSync } from "./inboundSync.ts";
+import { performOutboundSync } from "./outboundSync.ts";
 import { getSyncState } from "./syncState.ts";
 
 const PR_COMMENTS_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/comments$/;
 const PR_METADATA_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/metadata$/;
 const PR_SYNC_INBOUND_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/sync\/inbound$/;
+const PR_SYNC_OUTBOUND_PATTERN = /^\/api\/pr\/([A-Za-z0-9]{6,16})\/sync\/outbound$/;
 
 /**
  * GitHubHandler interface matching ExternalAnnotationHandler pattern.
@@ -371,6 +374,97 @@ export function createGitHubHandler(
           return Response.json(result);
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Sync failed";
+          if (msg.includes("token_expired")) {
+            return Response.json({ error: "token_expired" }, { status: 401 });
+          }
+          if (msg.includes("rate_limited")) {
+            const resetTime = msg.split(":")[1];
+            return Response.json(
+              { error: "rate_limited", resetAt: resetTime },
+              { status: 429 }
+            );
+          }
+          return Response.json({ error: msg }, { status: 500 });
+        }
+      }
+
+      // --- Outbound Sync Endpoint ---
+
+      const syncOutboundMatch = url.pathname.match(PR_SYNC_OUTBOUND_PATTERN);
+      if (syncOutboundMatch && req.method === "POST") {
+        const syncPasteId = syncOutboundMatch[1];
+
+        // Extract and validate token (same pattern as inbound)
+        const token = extractToken(req);
+        if (!token) {
+          return Response.json(
+            { error: "Authentication required to sync annotations" },
+            { status: 401 }
+          );
+        }
+
+        const authResult = await validateGitHubToken(token, kv);
+        if (!authResult.valid) {
+          return Response.json(
+            { error: authResult.error || "Invalid or expired token" },
+            { status: 401 }
+          );
+        }
+
+        // Load PR metadata with fallback chain (same as inbound)
+        let syncPrMetadata: PRMetadataWithSync | null = null;
+        if (kv) {
+          const syncPrJson = await kv.get(`sync:${syncPasteId}:pr`);
+          if (syncPrJson) {
+            try { syncPrMetadata = JSON.parse(syncPrJson); } catch {}
+          }
+        }
+        if (!syncPrMetadata && storage) {
+          const baseMeta = await storage.getPRMetadata(syncPasteId);
+          if (baseMeta) syncPrMetadata = baseMeta as PRMetadataWithSync;
+        }
+        if (!syncPrMetadata && kv) {
+          const legacyJson = await kv.get(`pr:${syncPasteId}`);
+          if (legacyJson) {
+            try { syncPrMetadata = JSON.parse(legacyJson); } catch {}
+          }
+        }
+
+        if (!syncPrMetadata) {
+          return Response.json(
+            { error: "No PR found for this paste" },
+            { status: 404 }
+          );
+        }
+
+        // Parse request body
+        let body: { annotations: any[]; blocks: any[]; planMarkdown: string };
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+        }
+
+        if (!body.annotations || !body.blocks || !body.planMarkdown) {
+          return Response.json(
+            { error: "Missing annotations, blocks, or planMarkdown" },
+            { status: 400 }
+          );
+        }
+
+        try {
+          const result = await performOutboundSync(
+            syncPasteId,
+            body.annotations,
+            body.blocks,
+            body.planMarkdown,
+            syncPrMetadata,
+            token,
+            kv
+          );
+          return Response.json(result);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Outbound sync failed";
           if (msg.includes("token_expired")) {
             return Response.json({ error: "token_expired" }, { status: 401 });
           }

@@ -120,8 +120,8 @@ Plans:
 **Plans:** 1/3 plans executed
 Plans:
 - [x] 06-01-PLAN.md — Server outbound sync module (TDD): performOutboundSync with classification, batch review, edit replies, KV mapping
-- [ ] 06-02-PLAN.md — Handler route + client hook + GitHubProvider wiring
-- [ ] 06-03-PLAN.md — UI: OutboundSyncButton, App.tsx integration, toasts, drift warning, end-to-end verification
+- [x] 06-02-PLAN.md — Handler route + client hook + GitHubProvider wiring
+- [x] 06-03-PLAN.md — UI: OutboundSyncButton, App.tsx integration, toasts, drift warning, end-to-end verification
 **UI hint**: yes
 
 ### Phase 7: Thread Management & Resolution

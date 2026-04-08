@@ -82,6 +82,78 @@ export const ApproveButton: React.FC<ApproveButtonProps> = ({
   </button>
 );
 
+interface OutboundSyncButtonProps {
+  onClick: () => void;
+  disabled?: boolean;
+  isLoading?: boolean;
+  unsyncedCount?: number;
+  title?: string;
+  disabledTitle?: string;
+}
+
+export const OutboundSyncButton: React.FC<OutboundSyncButtonProps> = ({
+  onClick,
+  disabled = false,
+  isLoading = false,
+  unsyncedCount = 0,
+  title = "Sync to GitHub",
+  disabledTitle = "Create a PR first to sync annotations",
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled || isLoading}
+    className={`relative p-1.5 md:px-2.5 md:py-1 rounded-md text-xs font-semibold transition-all ${
+      disabled
+        ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+        : "bg-accent/15 text-accent hover:bg-accent/25 border border-accent/30"
+    }`}
+    title={disabled ? disabledTitle : title}
+  >
+    {/* Upload arrow icon — 16x16px, per UI-SPEC */}
+    <svg
+      className={`w-4 h-4 md:hidden ${isLoading ? "animate-spin" : ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+      />
+    </svg>
+    <span className="hidden md:inline">
+      {isLoading ? (
+        <>
+          <svg
+            className="w-3.5 h-3.5 inline mr-1 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+          </svg>
+          Syncing...
+        </>
+      ) : (
+        "Push"
+      )}
+    </span>
+    {/* Badge -- per UI-SPEC: 16px circle, absolute positioned top-right */}
+    {unsyncedCount > 0 && !isLoading && (
+      <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 rounded-full bg-accent text-accent-foreground text-[10px] font-mono font-semibold px-0.5">
+        {unsyncedCount > 9 ? "9+" : unsyncedCount}
+      </span>
+    )}
+  </button>
+);
+
 interface SyncButtonProps {
   onClick: () => void;
   disabled?: boolean;
