@@ -4,7 +4,7 @@
  * Maps PR review comment line numbers to plan blocks for annotation display.
  */
 
-import type { Block } from "@plannotator/ui/types";
+import type { Block } from "../../ui/types.ts";
 
 /**
  * Find the block that contains a given line number.

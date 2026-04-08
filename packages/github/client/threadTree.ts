@@ -5,8 +5,8 @@
  * trees suitable for display in the annotation panel.
  */
 
-import type { Annotation, Block } from "@plannotator/ui/types";
-import { AnnotationType } from "@plannotator/ui/types";
+import type { Annotation, Block } from "../../ui/types.ts";
+import { AnnotationType } from "../../ui/types.ts";
 import { mapLineToBlock } from "./lineMapper.ts";
 import type { PRCommentForClient } from "../shared/types.ts";
 

@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { buildThreadTree, formatGitHubTimestamp } from "./threadTree.ts";
-import { AnnotationType } from "@plannotator/ui/types";
-import type { Block } from "@plannotator/ui/types";
+import { AnnotationType } from "../../ui/types.ts";
+import type { Block } from "../../ui/types.ts";
 import type { PRCommentForClient } from "../shared/types.ts";
 
 /** Helper to create a PRCommentForClient with sensible defaults */
