@@ -117,7 +117,11 @@ Plans:
   3. Repeated sync does not create duplicate comments (stable annotation IDs prevent re-posting)
   4. When the plan markdown has changed since PR creation, user sees a drift warning before sync proceeds
   5. DELETION annotations are posted as GitHub suggestion blocks; annotations with images include image references
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 06-01-PLAN.md — Server outbound sync module (TDD): performOutboundSync with classification, batch review, edit replies, KV mapping
+- [ ] 06-02-PLAN.md — Handler route + client hook + GitHubProvider wiring
+- [ ] 06-03-PLAN.md — UI: OutboundSyncButton, App.tsx integration, toasts, drift warning, end-to-end verification
 **UI hint**: yes
 
 ### Phase 7: Thread Management & Resolution
@@ -144,5 +148,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Data Model & Sync Infrastructure | 2/2 | In Progress|  |
 | 4. PR Creation & Export | 0/4 | Not started | - |
 | 5. Inbound Sync | 1/5 | In Progress|  |
-| 6. Outbound Sync | 0/0 | Not started | - |
+| 6. Outbound Sync | 0/3 | Not started | - |
 | 7. Thread Management & Resolution | 0/0 | Not started | - |
