@@ -90,11 +90,12 @@ export async function submitBatchReview(
   prNumber: number,
   token: string,
   comments: ReviewComment[],
-  reviewBody?: string
+  reviewBody?: string,
+  event?: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'
 ): Promise<any> {
   const body: Record<string, any> = {
     body: reviewBody || "Plan review exported from Plannotator",
-    event: "COMMENT",
+    event: event || "COMMENT",
   };
 
   if (comments.length > 0) {

@@ -201,6 +201,39 @@ describe("submitBatchReview", () => {
 
     globalThis.fetch = originalFetch;
   });
+
+  test("sends COMMENT event by default when no event parameter provided (backward compat)", async () => {
+    await submitBatchReview("owner", "repo", 42, "token123", []);
+
+    expect(fetchCalls[0].body.event).toBe("COMMENT");
+
+    globalThis.fetch = originalFetch;
+  });
+
+  test("sends APPROVE event when event parameter is APPROVE", async () => {
+    const comments = [
+      { path: "plans/test.md", line: 5, side: "RIGHT" as const, body: "LGTM" },
+    ];
+
+    await submitBatchReview("owner", "repo", 42, "token123", comments, "Approved!", "APPROVE");
+
+    expect(fetchCalls[0].body.event).toBe("APPROVE");
+    expect(fetchCalls[0].body.body).toBe("Approved!");
+
+    globalThis.fetch = originalFetch;
+  });
+
+  test("sends REQUEST_CHANGES event when event parameter is REQUEST_CHANGES", async () => {
+    const comments = [
+      { path: "plans/test.md", line: 3, side: "RIGHT" as const, body: "Needs work" },
+    ];
+
+    await submitBatchReview("owner", "repo", 42, "token123", comments, "Please revise", "REQUEST_CHANGES");
+
+    expect(fetchCalls[0].body.event).toBe("REQUEST_CHANGES");
+
+    globalThis.fetch = originalFetch;
+  });
 });
 
 describe("exportPlanWithAnnotations", () => {
