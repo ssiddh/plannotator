@@ -138,7 +138,7 @@ Plans:
 - [x] 07-01-PLAN.md — Types + GraphQL module + submitBatchReview event parameter (foundation)
 - [x] 07-02-PLAN.md — Summary creation UI, thread picker, AnnotationPanel badges/nav/filter, markdown export
 - [x] 07-03-PLAN.md — Review tab in ExportModal with approve/request-changes/comment submission
-- [ ] 07-04-PLAN.md — Outbound sync summary routing + resolution, inbound sync resolution status, review endpoint
+- [x] 07-04-PLAN.md — Outbound sync summary routing + resolution, inbound sync resolution status, review endpoint
 **UI hint**: yes
 
 ## Progress
