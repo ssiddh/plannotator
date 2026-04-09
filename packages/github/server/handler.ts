@@ -21,7 +21,7 @@ import {
 } from "./oauth.ts";
 import { extractToken, validateGitHubToken } from "./middleware.ts";
 import { exportToPR, fetchPRComments } from "./pr.ts";
-import { exportPlanWithAnnotations } from "./export.ts";
+import { exportPlanWithAnnotations, submitBatchReview } from "./export.ts";
 import { performInboundSync } from "./inboundSync.ts";
 import { performOutboundSync } from "./outboundSync.ts";
 import { getSyncState } from "./syncState.ts";
@@ -474,6 +474,79 @@ export function createGitHubHandler(
               { error: "rate_limited", resetAt: resetTime },
               { status: 429 }
             );
+          }
+          return Response.json({ error: msg }, { status: 500 });
+        }
+      }
+
+      // --- Review Submission Endpoint ---
+
+      if (url.pathname === "/api/github/review" && req.method === "POST") {
+        // Extract and validate token
+        const token = extractToken(req);
+        if (!token) {
+          return Response.json(
+            { error: "Authentication required to submit review" },
+            { status: 401 }
+          );
+        }
+
+        const authResult = await validateGitHubToken(token, kv);
+        if (!authResult.valid) {
+          return Response.json(
+            { error: authResult.error || "Invalid or expired token" },
+            { status: 401 }
+          );
+        }
+
+        let body: {
+          event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+          body?: string;
+          owner: string;
+          repo: string;
+          prNumber: number;
+        };
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json(
+            { error: "Invalid JSON body" },
+            { status: 400 }
+          );
+        }
+
+        if (!body.owner || !body.repo || !body.prNumber || !body.event) {
+          return Response.json(
+            { error: "Missing owner, repo, prNumber, or event" },
+            { status: 400 }
+          );
+        }
+
+        try {
+          const result = await submitBatchReview(
+            body.owner,
+            body.repo,
+            body.prNumber,
+            token,
+            [], // No line comments -- review-only submission
+            body.body,
+            body.event
+          );
+          return Response.json(result);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Review submission failed";
+          if (msg.includes("token_expired")) {
+            return Response.json({ error: "token_expired" }, { status: 401 });
+          }
+          if (msg.includes("rate_limited")) {
+            return Response.json(
+              { error: "rate_limited" },
+              { status: 429 }
+            );
+          }
+          // 422: GitHub returns this for closed/merged PRs
+          if (msg.includes("422") || msg.includes("Validation Failed")) {
+            return Response.json({ error: msg }, { status: 422 });
           }
           return Response.json({ error: msg }, { status: 500 });
         }
