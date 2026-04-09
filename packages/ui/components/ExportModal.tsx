@@ -11,6 +11,8 @@ import { getObsidianSettings, getEffectiveVaultPath } from '../utils/obsidian';
 import { getBearSettings } from '../utils/bear';
 import { getOctarineSettings } from '../utils/octarine';
 import { wrapFeedbackForAgent } from '../utils/parser';
+import { useReview, type ReviewEvent } from '../hooks/useReview';
+import type { Annotation } from '../types';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -54,9 +56,15 @@ interface ExportModalProps {
   hasImageAnnotations?: boolean;
   /** GitHub OAuth login URL */
   githubLoginUrl?: string;
+  /** Annotations for review submission (pending count + auto-sync) */
+  annotations?: Annotation[];
+  /** Outbound sync function to call before review submission */
+  onOutboundSync?: () => Promise<void>;
+  /** Server origin for API calls (e.g., paste service URL) */
+  serverOrigin?: string;
 }
 
-type Tab = 'share' | 'annotations' | 'notes' | 'github-pr';
+type Tab = 'share' | 'annotations' | 'notes' | 'github-pr' | 'review';
 
 type SaveTarget = 'obsidian' | 'bear' | 'octarine';
 type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
@@ -88,6 +96,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   hasDrift = false,
   hasImageAnnotations = false,
   githubLoginUrl,
+  annotations = [],
+  onOutboundSync,
+  serverOrigin = '',
 }) => {
   const defaultTab = initialTab || (sharingEnabled ? 'share' : 'annotations');
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
@@ -104,6 +115,32 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null);
   const [createdShareId, setCreatedShareId] = useState<string | null>(null);
   const [createShareError, setCreateShareError] = useState<string | null>(null);
+
+  // Review state
+  const [reviewBody, setReviewBody] = useState('');
+
+  // Parse PR metadata into owner/repo for useReview
+  const reviewPrMetadata = ghPrMetadata
+    ? (() => {
+        const [owner, repo] = (ghPrMetadata.repo || '').split('/');
+        return owner && repo
+          ? { owner, repo, prNumber: ghPrMetadata.pr_number, prUrl: ghPrMetadata.pr_url }
+          : null;
+      })()
+    : null;
+
+  const review = useReview({
+    prMetadata: reviewPrMetadata,
+    githubToken: githubToken || null,
+    annotations,
+    onSyncAnnotations: onOutboundSync,
+    serverOrigin,
+  });
+
+  const handleReviewSubmit = async (event: ReviewEvent) => {
+    await review.submitReview(event, reviewBody);
+    // Check success after -- state is updated synchronously in the hook
+  };
 
   // Reset tab when modal opens
   useEffect(() => {
@@ -125,6 +162,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       setCreatedPrUrl(null);
       setCreatedShareId(null);
       setCreateShareError(null);
+      setReviewBody('');
     }
   }, [isOpen]);
 
@@ -362,6 +400,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   }`}
                 >
                   GitHub PR
+                </button>
+              )}
+              {ghPrMetadata && (
+                <button
+                  onClick={() => setActiveTab('review')}
+                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    activeTab === 'review'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Review
                 </button>
               )}
             </div>
@@ -870,6 +920,87 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                         : 'Creating PR...'
                       : 'Export to GitHub PR'}
                   </button>
+                </>
+              )}
+            </div>
+          ) : activeTab === 'review' ? (
+            <div className="space-y-3">
+              {!ghPrMetadata ? (
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Link a PR to submit reviews
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Pending annotation count */}
+                  <p className="text-xs text-muted-foreground">
+                    {review.pendingCount} annotation{review.pendingCount !== 1 ? 's' : ''} will be synced with this review
+                  </p>
+
+                  {/* Review body textarea */}
+                  <textarea
+                    value={reviewBody}
+                    onChange={e => setReviewBody(e.target.value)}
+                    placeholder="Overall feedback (optional)"
+                    className="w-full min-h-[120px] bg-input border border-border rounded-md p-2 text-sm text-foreground placeholder:text-muted-foreground resize-y focus:outline-none focus:ring-2 focus:ring-accent/50"
+                    disabled={review.state !== 'idle'}
+                  />
+
+                  {/* Error message */}
+                  {review.error && (
+                    <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+                      <p className="text-xs text-destructive">{review.error}</p>
+                    </div>
+                  )}
+
+                  {/* Success message */}
+                  {review.state === 'success' && (
+                    <div className="p-2 bg-success/10 border border-success/20 rounded-md">
+                      <p className="text-xs text-success-foreground font-medium">Review submitted successfully</p>
+                    </div>
+                  )}
+
+                  {/* Action buttons or loading state */}
+                  {review.state === 'syncing' ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-muted rounded-lg">
+                      <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M7.76 7.76L4.93 4.93" />
+                      </svg>
+                      Syncing {review.pendingCount} annotation{review.pendingCount !== 1 ? 's' : ''}...
+                    </div>
+                  ) : review.state === 'submitting' ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-muted rounded-lg">
+                      <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M7.76 7.76L4.93 4.93" />
+                      </svg>
+                      Submitting review...
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        className="bg-success text-success-foreground px-4 py-2 rounded-md text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleReviewSubmit('APPROVE')}
+                        disabled={review.state !== 'idle'}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="bg-destructive text-destructive-foreground px-4 py-2 rounded-md text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleReviewSubmit('REQUEST_CHANGES')}
+                        disabled={review.state !== 'idle'}
+                      >
+                        Request Changes
+                      </button>
+                      <button
+                        className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleReviewSubmit('COMMENT')}
+                        disabled={review.state !== 'idle'}
+                      >
+                        Comment
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
