@@ -57,8 +57,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Thread Management & Resolution
 
-- [ ] **THREAD-01**: Author can create summary annotation for a discussion thread
-- [ ] **THREAD-02**: Summary annotation UI allows selecting which thread to summarize
+- [x] **THREAD-01**: Author can create summary annotation for a discussion thread
+- [x] **THREAD-02**: Summary annotation UI allows selecting which thread to summarize
 - [ ] **THREAD-03**: Summary annotations synced to GitHub as final reply in thread
 - [x] **THREAD-04**: Thread resolved on GitHub when summary annotation synced (GraphQL mutation)
 - [x] **THREAD-05**: User can submit PR review (approve/request changes) from Plannotator
@@ -155,8 +155,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-OUT-06 | Phase 6 | Complete |
 | SYNC-OUT-07 | Phase 6 | Complete |
 | SYNC-OUT-08 | Phase 6 | Complete |
-| THREAD-01 | Phase 7 | Pending |
-| THREAD-02 | Phase 7 | Pending |
+| THREAD-01 | Phase 7 | Complete |
+| THREAD-02 | Phase 7 | Complete |
 | THREAD-03 | Phase 7 | Pending |
 | THREAD-04 | Phase 7 | Complete |
 | THREAD-05 | Phase 7 | Complete |
