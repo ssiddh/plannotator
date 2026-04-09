@@ -22,13 +22,15 @@ Plan reviews happen seamlessly in both Plannotator and GitHub, with discussions 
 - [x] Sync state tracking with timestamps and direction — Validated in Phase 3: Data Model & Sync Infrastructure
 - [x] Conflict detection when both sides modified annotations — Validated in Phase 3: Data Model & Sync Infrastructure
 - [x] Users can create GitHub PR from a plan with annotations as initial review comments — Validated in Phase 4: PR Creation & Export
+- [x] GitHub PR comments (including replies) sync into Plannotator as annotations — Validated in Phase 5: Inbound Sync
+- [x] Plannotator annotations sync to GitHub as PR review comments (line-level) — Validated in Phase 6: Outbound Sync
+- [x] Discussion threads in GitHub display with all replies in Plannotator — Validated in Phase 5: Inbound Sync
+- [x] Plan author can create summary annotations in Plannotator — Validated in Phase 7: Thread Management & Resolution
+- [x] Summary annotations resolve the associated GitHub thread when synced — Validated in Phase 7: Thread Management & Resolution
 
 ### Active
-- [ ] GitHub PR comments (including replies) sync into Plannotator as annotations
-- [ ] Plannotator annotations sync to GitHub as PR review comments (line-level)
-- [ ] Discussion threads in GitHub display with all replies in Plannotator
-- [ ] Plan author can create summary annotations in Plannotator
-- [ ] Summary annotations resolve the associated GitHub thread when synced
+
+(None — all requirements validated)
 
 ### Out of Scope
 
@@ -49,6 +51,12 @@ This is a fork of upstream Plannotator (https://github.com/backnotprop/plannotat
 **Phase 3 complete:** Data model and sync infrastructure established. SHA-256 stable ID generation (12-char hex) with collision resolution. Bidirectional KV mapping with O(1) lookups (annotation ID ↔ comment ID). Sync state tracking persists timestamps and direction. Conflict detection identifies when both sides modified annotations. Existing line mapper validated for bidirectional conversion. All foundation modules ready for PR creation and bidirectional sync.
 
 **Phase 4 complete:** PR creation and export functionality operational. Users can create GitHub PRs from plans via "Export to GitHub PR" button in ExportModal. Annotations are posted as initial batch review comments (single GitHub notification). DELETION annotations export as GitHub suggestion blocks. PR metadata (repo, number, URL, plan hash) is stored and linked to paste ID. Drift detection warns when plan hash differs from stored PR. Backward compatibility maintained — legacy exportToPR path preserved when annotations are absent.
+
+**Phase 5 complete:** Inbound sync from GitHub to Plannotator fully operational. All PR comments (including nested replies) import as annotations via "Sync from GitHub" button. Threaded discussion structure preserved with depth-based indentation (max 3 levels). Pagination handles large PR comment threads. Per-comment timestamps enable edit/delete detection. Author avatars stored as first image in annotation metadata. Client-side deduplication prevents duplicate annotations on repeated syncs.
+
+**Phase 6 complete:** Outbound sync from Plannotator to GitHub fully operational. New annotations sync to GitHub as PR review comments via "Sync to GitHub" button. DELETION annotations export as suggestion blocks, COMMENT annotations as plain text. Positional matching recovers GitHub comment IDs from batch review response. Edit detection compares expected body format. 401 errors clear invalid tokens; 429 rate limits show retry guidance. GitHub-sourced annotations are filtered to prevent circular syncing.
+
+**Phase 7 complete:** Thread management and resolution features operational. Users can create summary annotations in Plannotator that post as thread replies on GitHub and resolve the associated thread via GraphQL. Thread picker modal and Previous/Next navigation buttons enable jumping between discussions. Resolved threads display with "Resolved" badge and 70% opacity; users can toggle "Show resolved" filter. Inbound sync fetches thread resolution status. Review tab in ExportModal allows submitting PR reviews (Approve/Request Changes/Comment) from Plannotator with auto-sync before submission.
 
 **Workflow:**
 1. User reviews plan in Plannotator, adds annotations
@@ -103,4 +111,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-03 after Phase 4 completion*
+*Last updated: 2026-04-09 after Phase 7 completion*
