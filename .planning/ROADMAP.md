@@ -133,7 +133,12 @@ Plans:
   2. Syncing a summary annotation to GitHub posts it as the final reply in the thread and resolves the thread
   3. Resolved thread status is displayed in the Plannotator annotation panel
   4. User can submit a PR review (approve / request changes / comment) from Plannotator, with all pending outbound annotations included as review comments
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 07-01-PLAN.md — Types + GraphQL module + submitBatchReview event parameter (foundation)
+- [ ] 07-02-PLAN.md — Summary creation UI, thread picker, AnnotationPanel badges/nav/filter, markdown export
+- [ ] 07-03-PLAN.md — Review tab in ExportModal with approve/request-changes/comment submission
+- [ ] 07-04-PLAN.md — Outbound sync summary routing + resolution, inbound sync resolution status, review endpoint
 **UI hint**: yes
 
 ## Progress
@@ -149,4 +154,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 4. PR Creation & Export | 0/4 | Not started | - |
 | 5. Inbound Sync | 1/5 | In Progress|  |
 | 6. Outbound Sync | 1/3 | In Progress|  |
-| 7. Thread Management & Resolution | 0/0 | Not started | - |
+| 7. Thread Management & Resolution | 0/4 | Not started | - |
