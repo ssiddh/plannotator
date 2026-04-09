@@ -307,4 +307,106 @@ describe("performInboundSync", () => {
     );
     expect(ghMappingCalls.length).toBe(1);
   });
+
+  test("11. Inbound sync includes isResolved from GraphQL thread status for thread root comments", async () => {
+    const kv = createMockKV();
+    const threadRoot = makeReviewComment({ id: "review_100", body: "Thread root", line: 5 });
+    const childComment = makeReviewComment({ id: "review_200", body: "Reply", line: 5, in_reply_to_id: "review_100" });
+
+    // Mock fetchReviewThreads: comment databaseId 100 maps to resolved thread
+    const mockFetchReviewThreads = async () => {
+      const map = new Map<number, { threadNodeId: string; isResolved: boolean }>();
+      map.set(100, { threadNodeId: "THREAD_NODE_1", isResolved: true });
+      return map;
+    };
+
+    const result = await performInboundSync(
+      "paste1",
+      mockPRMetadata,
+      "token",
+      kv,
+      undefined,
+      createMockFetch([threadRoot, childComment]),
+      mockFetchReviewThreads as any
+    );
+
+    expect(result.annotations.length).toBe(2);
+    // Thread root should have isResolved = true
+    const root = result.annotations.find((a) => a.githubCommentId === "review_100")!;
+    expect(root.isResolved).toBe(true);
+    expect(root.threadNodeId).toBe("THREAD_NODE_1");
+    // Child comment should NOT have isResolved (it's a thread-level property)
+    const child = result.annotations.find((a) => a.githubCommentId === "review_200")!;
+    expect(child.isResolved).toBeUndefined();
+  });
+
+  test("12. Re-opened threads correctly update isResolved to false", async () => {
+    const kv = createMockKV();
+    const comment = makeReviewComment({ id: "review_100", body: "Discussion", line: 5 });
+
+    const mockFetchReviewThreads = async () => {
+      const map = new Map<number, { threadNodeId: string; isResolved: boolean }>();
+      map.set(100, { threadNodeId: "THREAD_NODE_1", isResolved: false }); // Re-opened
+      return map;
+    };
+
+    const result = await performInboundSync(
+      "paste1",
+      mockPRMetadata,
+      "token",
+      kv,
+      undefined,
+      createMockFetch([comment]),
+      mockFetchReviewThreads as any
+    );
+
+    const ann = result.annotations[0];
+    expect(ann.isResolved).toBe(false);
+  });
+
+  test("13. Issue comments have isResolved undefined (not in any thread)", async () => {
+    const kv = createMockKV();
+    const issueComment = makeIssueComment({ id: "issue_300", body: "General" });
+
+    const mockFetchReviewThreads = async () => {
+      return new Map<number, { threadNodeId: string; isResolved: boolean }>();
+    };
+
+    const result = await performInboundSync(
+      "paste1",
+      mockPRMetadata,
+      "token",
+      kv,
+      undefined,
+      createMockFetch([issueComment]),
+      mockFetchReviewThreads as any
+    );
+
+    expect(result.annotations[0].isResolved).toBeUndefined();
+  });
+
+  test("14. GraphQL failure does not break inbound sync (graceful degradation)", async () => {
+    const kv = createMockKV();
+    const comment = makeReviewComment({ id: "review_100", body: "Fix this", line: 5 });
+
+    const failingFetchReviewThreads = async () => {
+      throw new Error("GraphQL request failed");
+    };
+
+    const result = await performInboundSync(
+      "paste1",
+      mockPRMetadata,
+      "token",
+      kv,
+      undefined,
+      createMockFetch([comment]),
+      failingFetchReviewThreads as any
+    );
+
+    // Sync should succeed despite GraphQL failure
+    expect(result.annotations.length).toBe(1);
+    expect(result.stats.new).toBe(1);
+    // isResolved should be undefined since GraphQL failed
+    expect(result.annotations[0].isResolved).toBeUndefined();
+  });
 });

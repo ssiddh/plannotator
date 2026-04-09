@@ -19,15 +19,18 @@ import {
   deleteMapping,
 } from "./syncMappings.ts";
 import { setSyncState } from "./syncState.ts";
+import { fetchReviewThreads } from "./graphql.ts";
 
 const KV_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 
 /**
  * Convert a PRComment to a PRCommentForClient.
+ * Optionally includes thread resolution status from GraphQL.
  */
 function toClientComment(
   comment: PRComment,
-  annotationId: string
+  annotationId: string,
+  threadInfo?: { threadNodeId: string; isResolved: boolean }
 ): PRCommentForClient {
   let originalText: string;
   if (comment.comment_type === "issue") {
@@ -38,7 +41,7 @@ function toClientComment(
     originalText = "[Line unmapped]";
   }
 
-  return {
+  const result: PRCommentForClient = {
     id: annotationId,
     githubCommentId: comment.id,
     blockId: "", // Client does line mapping
@@ -54,6 +57,14 @@ function toClientComment(
     commentType: comment.comment_type,
     line: comment.line || null,
   };
+
+  // Only set resolution fields for thread root comments (D-20: thread-level property)
+  if (threadInfo) {
+    result.isResolved = threadInfo.isResolved;
+    result.threadNodeId = threadInfo.threadNodeId;
+  }
+
+  return result;
 }
 
 /**
@@ -68,17 +79,31 @@ export async function performInboundSync(
   token: string,
   kv: any,
   options?: { since?: string },
-  fetchFn?: typeof fetchPRComments
+  fetchFn?: typeof fetchPRComments,
+  fetchReviewThreadsFn?: typeof fetchReviewThreads
 ): Promise<InboundSyncResponse> {
   // Pitfall 5: In-memory deduplication guard against KV eventual consistency
   const processedCommentIds = new Set<string>();
 
   const _fetchPRComments = fetchFn || fetchPRComments;
+  const _fetchReviewThreads = fetchReviewThreadsFn || fetchReviewThreads;
 
   // Step 1: Fetch all comments
   const { comments } = await _fetchPRComments(prMetadata, token, {
     since: options?.since,
   });
+
+  // Step 1b: Fetch thread resolution status via GraphQL (D-25, D-28, D-31)
+  const [owner, repoName] = prMetadata.repo.split("/");
+  let threadStatusMap: Map<number, { threadNodeId: string; isResolved: boolean }> = new Map();
+  try {
+    threadStatusMap = await _fetchReviewThreads(
+      owner, repoName, prMetadata.pr_number, token
+    );
+  } catch (e) {
+    // GraphQL failure: graceful degradation, continue without resolution status
+    console.warn("Failed to fetch thread resolution status:", e);
+  }
 
   // Step 2: Load previously imported comment IDs for deletion detection
   const importedListKey = `sync:${pasteId}:imported`;
@@ -94,9 +119,24 @@ export async function performInboundSync(
   const annotations: PRCommentForClient[] = [];
   const stats = { total: comments.length, new: 0, updated: 0, deleted: 0, skipped: 0 };
 
+  // Helper: extract numeric databaseId from comment.id and look up thread info.
+  // Only thread root comments (whose databaseId appears as firstCommentDatabaseId) get resolution status.
+  // Child comments do NOT get isResolved -- it's a thread-level property per D-20.
+  function getThreadInfoForComment(comment: PRComment): { threadNodeId: string; isResolved: boolean } | undefined {
+    // Only review comments can be in threads; issue comments cannot
+    if (comment.comment_type !== "review") return undefined;
+    // Child comments (replies) don't get thread-level resolution
+    if (comment.in_reply_to_id) return undefined;
+    // Extract numeric ID: "review_100" -> 100
+    const numericId = parseInt(comment.id.replace(/^review_/, ""), 10);
+    if (isNaN(numericId)) return undefined;
+    return threadStatusMap.get(numericId);
+  }
+
   for (const comment of comments) {
     const existingAnnotationId = await getAnnotationId(pasteId, comment.id, kv);
     const alreadyProcessed = processedCommentIds.has(comment.id);
+    const threadInfo = getThreadInfoForComment(comment);
 
     if (existingAnnotationId) {
       // Comment was previously imported - check for edits
@@ -107,7 +147,7 @@ export async function performInboundSync(
       if (storedTimestamp && comment.updated_at > storedTimestamp) {
         // Edit detected
         stats.updated++;
-        annotations.push(toClientComment(comment, existingAnnotationId));
+        annotations.push(toClientComment(comment, existingAnnotationId, threadInfo));
         // Update stored timestamp
         await kv.put(storedTimestampKey, comment.updated_at, {
           expirationTtl: KV_TTL,
@@ -128,7 +168,7 @@ export async function performInboundSync(
       });
 
       stats.new++;
-      annotations.push(toClientComment(comment, annotationId));
+      annotations.push(toClientComment(comment, annotationId, threadInfo));
     } else {
       // Duplicate within same sync batch (Pitfall 5)
       stats.skipped++;

@@ -90,6 +90,8 @@ export interface PRCommentForClient {
   inReplyToId: string | null;
   commentType: "review" | "issue";
   line: number | null;
+  isResolved?: boolean;       // Thread resolution status from GitHub GraphQL (D-26)
+  threadNodeId?: string;      // GraphQL thread node_id for future resolution
 }
 
 // --- Plugin config (replaces process.env references) ---
