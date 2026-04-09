@@ -143,3 +143,10 @@ export interface ConflictInfo {
 
 /** User's resolution choice for a conflict (D-12) */
 export type ConflictResolution = "keep-local" | "keep-remote" | "abort";
+
+/** Thread resolution info from GitHub GraphQL API (Phase 7) */
+export interface ReviewThreadInfo {
+  threadNodeId: string;           // GraphQL node_id for resolveReviewThread mutation
+  isResolved: boolean;
+  firstCommentDatabaseId: number; // REST-compatible numeric ID for mapping
+}

@@ -41,6 +41,9 @@ export interface Annotation {
   };
   children?: Annotation[];        // Nested thread replies (D-04)
   githubCommentUrl?: string;      // Link to GitHub comment (D-10)
+  isSummary?: boolean;            // Marks annotation as thread summary (D-04)
+  summarizesThreadId?: string;    // References thread parent annotation ID (THREAD-01)
+  isResolved?: boolean;           // Thread resolution status from GitHub (D-26)
 }
 
 export interface Block {
@@ -148,3 +151,4 @@ export type {
   AgentCapability,
   AgentCapabilities,
 } from '@plannotator/shared/agent-jobs';
+// Test change
