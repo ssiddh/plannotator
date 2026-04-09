@@ -275,6 +275,25 @@ export async function fetchPRComments(
 }
 
 /**
+ * Post a reply to an existing pull request review comment (thread reply).
+ * Used by outbound sync to post summary annotations as thread replies.
+ */
+export async function replyToComment(
+  owner: string,
+  repo: string,
+  prNumber: number,
+  commentId: number,
+  body: string,
+  token: string
+): Promise<any> {
+  return githubRequest(
+    `POST /repos/${owner}/${repo}/pulls/${prNumber}/comments/${commentId}/replies`,
+    token,
+    { body }
+  );
+}
+
+/**
  * Helper: Make authenticated GitHub API request.
  */
 export async function githubRequest(

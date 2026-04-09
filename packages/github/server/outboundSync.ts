@@ -18,7 +18,8 @@ import {
 } from "./export.ts";
 import { getCommentId, setMapping } from "./syncMappings.ts";
 import { setSyncState } from "./syncState.ts";
-import { fetchPRComments, githubRequest } from "./pr.ts";
+import { fetchPRComments, githubRequest, replyToComment } from "./pr.ts";
+import { resolveReviewThread, fetchReviewThreads } from "./graphql.ts";
 
 const KV_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 
@@ -27,6 +28,7 @@ export interface OutboundSyncResult {
   syncedCount: number;   // New annotations posted
   editCount: number;     // Edited annotations posted as replies
   skippedCount: number;  // Already-synced unchanged annotations
+  summaryCount: number;  // Summary annotations posted as thread replies
   warnings: string[];    // e.g., "N global annotations skipped (no line position)"
   hasDrift: boolean;     // true when plan hash differs from prMetadata.planHash
 }
@@ -105,12 +107,18 @@ export async function performOutboundSync(
     githubRequestFn?: typeof githubRequest;
     submitBatchReviewFn?: typeof submitBatchReview;
     generatePlanHashFn?: typeof generatePlanHash;
+    replyToCommentFn?: typeof replyToComment;
+    fetchReviewThreadsFn?: typeof fetchReviewThreads;
+    resolveReviewThreadFn?: typeof resolveReviewThread;
   }
 ): Promise<OutboundSyncResult> {
   const _fetchPRComments = options?.fetchFn || fetchPRComments;
   const _githubRequest = options?.githubRequestFn || githubRequest;
   const _submitBatchReview = options?.submitBatchReviewFn || submitBatchReview;
   const _generatePlanHash = options?.generatePlanHashFn || generatePlanHash;
+  const _replyToComment = options?.replyToCommentFn || replyToComment;
+  const _fetchReviewThreads = options?.fetchReviewThreadsFn || fetchReviewThreads;
+  const _resolveReviewThread = options?.resolveReviewThreadFn || resolveReviewThread;
 
   const [owner, repoName] = prMetadata.repo.split("/");
   const prNumber = prMetadata.pr_number;
@@ -120,9 +128,13 @@ export async function performOutboundSync(
   const currentHash = await _generatePlanHash(planMarkdown);
   const hasDrift = currentHash !== prMetadata.planHash;
 
-  // Step 2: Filter GLOBAL_COMMENT annotations
-  const globalAnnotations = annotations.filter((a) => a.type === "GLOBAL_COMMENT");
-  const lineAnnotations = annotations.filter((a) => a.type !== "GLOBAL_COMMENT");
+  // Step 1b: Separate summary annotations from regular annotations (Pitfall 5: summaries go to reply path, NOT batch review)
+  const summaryAnnotations = annotations.filter((a: any) => a.isSummary);
+  const regularAnnotations = annotations.filter((a: any) => !a.isSummary);
+
+  // Step 2: Filter GLOBAL_COMMENT annotations (from regular only)
+  const globalAnnotations = regularAnnotations.filter((a) => a.type === "GLOBAL_COMMENT");
+  const lineAnnotations = regularAnnotations.filter((a) => a.type !== "GLOBAL_COMMENT");
 
   if (globalAnnotations.length > 0) {
     warnings.push(
@@ -226,6 +238,49 @@ export async function performOutboundSync(
     editCount++;
   }
 
+  // Step 7b: Process summary annotations as thread replies with resolution
+  let summaryCount = 0;
+  for (const summary of summaryAnnotations) {
+    const summaryData = summary as any;
+    const parentAnnotationId = summaryData.summarizesThreadId;
+    if (!parentAnnotationId) continue;
+
+    // Look up parent annotation's GitHub comment ID
+    const parentGhId = await getCommentId(pasteId, parentAnnotationId, kv);
+    if (!parentGhId) {
+      warnings.push(`Summary for thread ${parentAnnotationId}: parent not synced to GitHub`);
+      continue;
+    }
+
+    // Strip "review_" prefix to get numeric ID for the reply endpoint
+    const numericParentId = parseInt(parentGhId.replace(/^review_/, ""), 10);
+    if (isNaN(numericParentId)) {
+      warnings.push(`Summary for thread ${parentAnnotationId}: invalid parent comment ID`);
+      continue;
+    }
+
+    // Post summary as reply to parent comment
+    const replyBody = summaryData.text || summaryData.originalText;
+    const reply = await _githubRequest(
+      `POST /repos/${owner}/${repoName}/pulls/${prNumber}/comments/${numericParentId}/replies`,
+      token,
+      { body: replyBody }
+    );
+    await setMapping(pasteId, summary.id, String(reply.id), kv, KV_TTL);
+    summaryCount++;
+
+    // Attempt thread resolution (D-09)
+    const threadMap = await _fetchReviewThreads(owner, repoName, prNumber, token);
+    const threadInfo = threadMap.get(numericParentId);
+    if (threadInfo) {
+      const resolved = await _resolveReviewThread(threadInfo.threadNodeId, token);
+      if (!resolved) {
+        // D-11/D-34: graceful failure, summary still posted
+        warnings.push("Summary posted but thread not resolved -- resolve manually on GitHub");
+      }
+    }
+  }
+
   // Step 8: Update sync state
   await setSyncState(pasteId, Date.now(), "outbound", kv, KV_TTL);
 
@@ -233,6 +288,7 @@ export async function performOutboundSync(
     syncedCount: newAnnotations.length,
     editCount,
     skippedCount,
+    summaryCount,
     warnings,
     hasDrift,
   };

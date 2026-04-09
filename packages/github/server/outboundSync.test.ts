@@ -427,7 +427,210 @@ describe("performOutboundSync", () => {
     expect(comments[0].body).toContain("```suggestion");
   });
 
-  test("10. Edit reply uses correct endpoint with stripped 'review_' prefix", async () => {
+  test("10. Summary annotations are separated from regular annotations and posted as thread replies", async () => {
+    const kv = createMockKV();
+    // Pre-populate KV: the parent annotation "ann-parent" is already synced as review_700
+    await kv.put("sync:paste1:ann:ann-parent", "review_700");
+    await kv.put("sync:paste1:gh:review_700", "ann-parent");
+
+    const regularAnn = makeAnnotation({ id: "ann-1", text: "Regular comment", blockId: "block-1" });
+    const summaryAnn = makeAnnotation({
+      id: "ann-summary-1",
+      text: "Thread resolved: decided to keep current approach",
+      blockId: "block-1",
+      isSummary: true,
+      summarizesThreadId: "ann-parent",
+    } as any);
+
+    const blocks = [makeBlock({ id: "block-1", startLine: 5 })];
+
+    const mockSubmit = createMockSubmitBatchReview(12345);
+    const mockGithub = createMockGithubRequest({
+      // Review comments fetch for regular annotation mapping
+      "reviews/12345/comments": [
+        { id: 999, body: "Regular comment", path: "plans/paste1.md", line: 5 },
+      ],
+      // Reply endpoint for summary
+      "comments/700/replies": { id: 800, body: "Thread resolved: decided to keep current approach" },
+    });
+
+    // Mock fetchReviewThreads to return thread info for parent comment 700
+    const mockFetchReviewThreads = async () => {
+      const map = new Map<number, { threadNodeId: string; isResolved: boolean }>();
+      map.set(700, { threadNodeId: "THREAD_NODE_1", isResolved: false });
+      return map;
+    };
+
+    const mockResolveReviewThread = async () => true;
+
+    const result = await performOutboundSync(
+      "paste1",
+      [regularAnn, summaryAnn],
+      blocks,
+      "# Plan",
+      mockPRMetadata,
+      "token",
+      kv,
+      {
+        fetchFn: createMockFetchPRComments([]),
+        submitBatchReviewFn: mockSubmit.fn as any,
+        githubRequestFn: mockGithub.fn as any,
+        generatePlanHashFn: createMockGeneratePlanHash("abc123hash"),
+        fetchReviewThreadsFn: mockFetchReviewThreads as any,
+        resolveReviewThreadFn: mockResolveReviewThread as any,
+      }
+    );
+
+    // Regular annotation posted via batch review
+    expect(result.syncedCount).toBe(1);
+    // Summary posted as reply
+    expect(result.summaryCount).toBe(1);
+    // Reply endpoint called for summary
+    const replyCalls = mockGithub.calls.filter((c: any) => c.endpoint.includes("comments/700/replies"));
+    expect(replyCalls.length).toBe(1);
+  });
+
+  test("11. Summary reply triggers resolveReviewThread after successful post", async () => {
+    const kv = createMockKV();
+    await kv.put("sync:paste1:ann:ann-parent", "review_700");
+    await kv.put("sync:paste1:gh:review_700", "ann-parent");
+
+    const summaryAnn = makeAnnotation({
+      id: "ann-summary-1",
+      text: "Summary of discussion",
+      blockId: "block-1",
+      isSummary: true,
+      summarizesThreadId: "ann-parent",
+    } as any);
+
+    const blocks = [makeBlock({ id: "block-1", startLine: 5 })];
+    const mockSubmit = createMockSubmitBatchReview();
+    const mockGithub = createMockGithubRequest({
+      "comments/700/replies": { id: 800 },
+    });
+
+    let resolveCalledWith: string | null = null;
+    const mockResolveReviewThread = async (threadNodeId: string) => {
+      resolveCalledWith = threadNodeId;
+      return true;
+    };
+
+    const mockFetchReviewThreads = async () => {
+      const map = new Map<number, { threadNodeId: string; isResolved: boolean }>();
+      map.set(700, { threadNodeId: "THREAD_NODE_1", isResolved: false });
+      return map;
+    };
+
+    await performOutboundSync(
+      "paste1",
+      [summaryAnn],
+      blocks,
+      "# Plan",
+      mockPRMetadata,
+      "token",
+      kv,
+      {
+        fetchFn: createMockFetchPRComments([]),
+        submitBatchReviewFn: mockSubmit.fn as any,
+        githubRequestFn: mockGithub.fn as any,
+        generatePlanHashFn: createMockGeneratePlanHash("abc123hash"),
+        fetchReviewThreadsFn: mockFetchReviewThreads as any,
+        resolveReviewThreadFn: mockResolveReviewThread as any,
+      }
+    );
+
+    expect(resolveCalledWith).toBe("THREAD_NODE_1");
+  });
+
+  test("12. Resolution failure does not roll back summary reply (D-11/D-34)", async () => {
+    const kv = createMockKV();
+    await kv.put("sync:paste1:ann:ann-parent", "review_700");
+    await kv.put("sync:paste1:gh:review_700", "ann-parent");
+
+    const summaryAnn = makeAnnotation({
+      id: "ann-summary-1",
+      text: "Summary text",
+      blockId: "block-1",
+      isSummary: true,
+      summarizesThreadId: "ann-parent",
+    } as any);
+
+    const blocks = [makeBlock({ id: "block-1", startLine: 5 })];
+    const mockSubmit = createMockSubmitBatchReview();
+    const mockGithub = createMockGithubRequest({
+      "comments/700/replies": { id: 800 },
+    });
+
+    const mockResolveReviewThread = async () => false; // Resolution fails
+    const mockFetchReviewThreads = async () => {
+      const map = new Map<number, { threadNodeId: string; isResolved: boolean }>();
+      map.set(700, { threadNodeId: "THREAD_NODE_1", isResolved: false });
+      return map;
+    };
+
+    const result = await performOutboundSync(
+      "paste1",
+      [summaryAnn],
+      blocks,
+      "# Plan",
+      mockPRMetadata,
+      "token",
+      kv,
+      {
+        fetchFn: createMockFetchPRComments([]),
+        submitBatchReviewFn: mockSubmit.fn as any,
+        githubRequestFn: mockGithub.fn as any,
+        generatePlanHashFn: createMockGeneratePlanHash("abc123hash"),
+        fetchReviewThreadsFn: mockFetchReviewThreads as any,
+        resolveReviewThreadFn: mockResolveReviewThread as any,
+      }
+    );
+
+    // Summary still counted as successful
+    expect(result.summaryCount).toBe(1);
+    // Warning about resolution failure
+    expect(result.warnings.some((w: string) => w.includes("thread not resolved"))).toBe(true);
+  });
+
+  test("13. Summary sync fails gracefully when parent has no GitHub mapping", async () => {
+    const kv = createMockKV();
+    // No mapping for ann-parent -- not synced to GitHub
+
+    const summaryAnn = makeAnnotation({
+      id: "ann-summary-1",
+      text: "Summary text",
+      blockId: "block-1",
+      isSummary: true,
+      summarizesThreadId: "ann-parent",
+    } as any);
+
+    const blocks = [makeBlock({ id: "block-1", startLine: 5 })];
+    const mockSubmit = createMockSubmitBatchReview();
+    const mockGithub = createMockGithubRequest({});
+
+    const result = await performOutboundSync(
+      "paste1",
+      [summaryAnn],
+      blocks,
+      "# Plan",
+      mockPRMetadata,
+      "token",
+      kv,
+      {
+        fetchFn: createMockFetchPRComments([]),
+        submitBatchReviewFn: mockSubmit.fn as any,
+        githubRequestFn: mockGithub.fn as any,
+        generatePlanHashFn: createMockGeneratePlanHash("abc123hash"),
+      }
+    );
+
+    // Summary not synced
+    expect(result.summaryCount).toBe(0);
+    // Error message about parent not synced
+    expect(result.warnings.some((w: string) => w.includes("parent not synced"))).toBe(true);
+  });
+
+  test("14. Edit reply uses correct endpoint with stripped 'review_' prefix", async () => {
     const kv = createMockKV();
     // Pre-populate KV: ann-1 -> review_500
     await kv.put("sync:paste1:ann:ann-1", "review_500");
