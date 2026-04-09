@@ -382,6 +382,11 @@ echo }
     echo Updated plugin hooks at !PLUGIN_HOOKS!
 )
 
+REM Clear any cached OpenCode plugin to force fresh download on next run
+if exist "%USERPROFILE%\.cache\opencode\node_modules\@plannotator" rmdir /s /q "%USERPROFILE%\.cache\opencode\node_modules\@plannotator" >nul 2>&1
+if exist "%USERPROFILE%\.cache\opencode\packages\@plannotator" rmdir /s /q "%USERPROFILE%\.cache\opencode\packages\@plannotator" >nul 2>&1
+if exist "%USERPROFILE%\.bun\install\cache\@plannotator" rmdir /s /q "%USERPROFILE%\.bun\install\cache\@plannotator" >nul 2>&1
+
 REM Update Pi extension if pi is installed
 where pi >nul 2>&1
 if !ERRORLEVEL! equ 0 (
