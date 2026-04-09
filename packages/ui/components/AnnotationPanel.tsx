@@ -4,6 +4,11 @@ import { isCurrentUser } from '../utils/identity';
 import { ImageThumbnail } from './ImageThumbnail';
 import { EditorAnnotationCard } from './EditorAnnotationCard';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useSummaryAnnotation, getThreadLabel } from '../hooks/useSummaryAnnotation';
+import { useThreadNav } from '../hooks/useThreadNav';
+import { SummaryModal } from './SummaryModal';
+import { ThreadPickerModal } from './ThreadPickerModal';
+import { exportSummariesAsMarkdown, downloadSummariesMarkdown } from '../utils/summaryExport';
 
 interface PanelProps {
   isOpen: boolean;
@@ -22,6 +27,8 @@ interface PanelProps {
   onQuickCopy?: () => Promise<void>;
   otherFileAnnotations?: { count: number; files: number };
   onOtherFileAnnotationsClick?: () => void;
+  onAddAnnotation?: (annotation: Annotation) => void;
+  prMetadata?: { prNumber: number; prTitle?: string };
 }
 
 export const AnnotationPanel: React.FC<PanelProps> = ({
@@ -41,13 +48,24 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   onQuickCopy,
   otherFileAnnotations,
   onOtherFileAnnotationsClick,
+  onAddAnnotation,
+  prMetadata,
 }) => {
   const isMobile = useIsMobile();
   const [copied, setCopied] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
+  const [showResolved, setShowResolved] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
-  const sortedAnnotations = [...annotations].sort((a, b) => a.createdA - b.createdA);
-  const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
+
+  const summaryHook = useSummaryAnnotation({ annotations, onAddAnnotation });
+  const threadNav = useThreadNav({ annotations });
+
+  const filteredAnnotations = showResolved
+    ? annotations
+    : annotations.filter(a => !a.isResolved);
+  const sortedAnnotations = [...filteredAnnotations].sort((a, b) => a.createdA - b.createdA);
+  const totalCount = filteredAnnotations.length + (editorAnnotations?.length ?? 0);
+  const hasSummaries = annotations.some(a => a.isSummary === true);
 
   // Scroll selected annotation card into view
   useEffect(() => {
@@ -88,6 +106,45 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
             <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
               {totalCount}
             </span>
+            {/* Thread nav buttons */}
+            {threadNav.threadCount > 0 && (
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={threadNav.goToPrev}
+                  disabled={!threadNav.hasPrev}
+                  className={`p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${!threadNav.hasPrev ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Previous thread"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={threadNav.goToNext}
+                  disabled={!threadNav.hasNext}
+                  className={`p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${!threadNav.hasNext ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Next thread"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            {/* Export summaries button */}
+            <button
+              onClick={() => {
+                const md = exportSummariesAsMarkdown(annotations, prMetadata?.prNumber, prMetadata?.prTitle);
+                downloadSummariesMarkdown(md, prMetadata?.prNumber);
+              }}
+              disabled={!hasSummaries}
+              className={`p-1 rounded-md text-muted-foreground hover:text-accent transition-colors ${!hasSummaries ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Export Summaries"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            </button>
             {isMobile && onClose && (
               <button
                 onClick={onClose}
@@ -109,6 +166,18 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
           >
             +{otherFileAnnotations.count} in {otherFileAnnotations.files} other file{otherFileAnnotations.files === 1 ? '' : 's'}
           </button>
+        )}
+        {/* Resolved thread filter */}
+        {annotations.some(a => a.isResolved) && (
+          <label className="mt-1.5 flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showResolved}
+              onChange={e => setShowResolved(e.target.checked)}
+              className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
+            />
+            <span className="text-[10px] font-mono text-muted-foreground ml-1">Show resolved</span>
+          </label>
         )}
       </div>
 
@@ -139,6 +208,8 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
                 onSelectById={onSelect}
                 onDeleteById={onDelete}
                 onEditById={onEdit}
+                onSummarize={summaryHook.openSummaryModal}
+                allAnnotations={annotations}
               />
             ))}
             {editorAnnotations && editorAnnotations.length > 0 && (
@@ -217,6 +288,19 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
           )}
         </div>
       )}
+      {/* Summary and Thread Picker modals */}
+      <SummaryModal
+        isOpen={summaryHook.summaryModalOpen}
+        onClose={summaryHook.closeSummaryModal}
+        threadLabel={summaryHook.selectedThreadLabel}
+        onSubmit={summaryHook.submitSummary}
+      />
+      <ThreadPickerModal
+        isOpen={summaryHook.threadPickerOpen}
+        onClose={summaryHook.closeThreadPicker}
+        threads={summaryHook.threads}
+        onSelect={summaryHook.openSummaryModal}
+      />
     </aside>
   );
 
@@ -274,7 +358,9 @@ const AnnotationCard: React.FC<{
   onSelectById?: (id: string) => void;
   onDeleteById?: (id: string) => void;
   onEditById?: (id: string, updates: Partial<Annotation>) => void;
-}> = ({ annotation, isSelected, onSelect, onDelete, onEdit, depth = 0, selectedId, onSelectById, onDeleteById, onEditById }) => {
+  onSummarize?: (threadId: string) => void;
+  allAnnotations?: Annotation[];
+}> = ({ annotation, isSelected, onSelect, onDelete, onEdit, depth = 0, selectedId, onSelectById, onDeleteById, onEditById, onSummarize, allAnnotations }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(annotation.text || '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -366,6 +452,15 @@ const AnnotationCard: React.FC<{
     )
   };
 
+  const isThreadParent = annotation.children && annotation.children.length > 0;
+  const isSummaryCard = annotation.isSummary === true;
+  const isResolvedThread = annotation.isResolved === true;
+
+  // Find parent annotation for summary context
+  const summaryParent = isSummaryCard && annotation.summarizesThreadId && allAnnotations
+    ? allAnnotations.find(a => a.id === annotation.summarizesThreadId)
+    : null;
+
   return (
     <div
       data-annotation-id={annotation.id}
@@ -376,6 +471,8 @@ const AnnotationCard: React.FC<{
           ? 'bg-primary/5 border-primary/30 shadow-sm'
           : 'border-transparent hover:bg-muted/50 hover:border-border/50'
         }
+        ${isSummaryCard ? 'bg-warning/10 border-l-4 border-warning pl-3' : ''}
+        ${isResolvedThread && depth === 0 ? 'opacity-70' : ''}
       `}
     >
       {/* Author -- GitHub-enhanced row (D-07, D-10, D-11) */}
@@ -442,6 +539,30 @@ const AnnotationCard: React.FC<{
         </div>
       )}
 
+      {/* Summary badge + context */}
+      {isSummaryCard && (
+        <>
+          <span className="bg-warning text-warning-foreground text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1 mb-1.5">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Summary
+          </span>
+          {summaryParent && (
+            <div className="text-xs text-muted-foreground mb-1.5">
+              Summary of: {getThreadLabel(summaryParent)}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Resolved badge on thread parent */}
+      {isResolvedThread && depth === 0 && (
+        <span className="bg-success text-success-foreground text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded mb-1.5 inline-block">
+          Resolved
+        </span>
+      )}
+
       {/* Type Badge + Timestamp + Actions */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -486,6 +607,19 @@ const AnnotationCard: React.FC<{
               </svg>
             </button>
           </div>
+        )}
+        {/* Summarize button on thread parents */}
+        {isThreadParent && onSummarize && (
+          <button
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onSummarize(annotation.id); }}
+            className="text-muted-foreground hover:text-accent hover:bg-accent/10 rounded-md px-2 py-1 text-xs font-semibold flex items-center gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all"
+            title="Summarize thread"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Summarize
+          </button>
         )}
       </div>
 
@@ -606,6 +740,8 @@ const AnnotationCard: React.FC<{
               onSelectById={onSelectById}
               onDeleteById={onDeleteById}
               onEditById={onEditById}
+              onSummarize={onSummarize}
+              allAnnotations={allAnnotations}
             />
           ))}
         </div>
