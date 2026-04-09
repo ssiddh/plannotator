@@ -13,6 +13,7 @@
     "./server/middleware": "./server/middleware.ts",
     "./server/oauth": "./server/oauth.ts",
     "./server/pr": "./server/pr.ts",
+    "./server/auth-page": "./server/auth-page.ts",
     "./client": "./client/GitHubProvider.tsx",
     "./client/GitHubProvider": "./client/GitHubProvider.tsx",
     "./client/useGitHub": "./client/useGitHub.ts",

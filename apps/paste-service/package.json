@@ -7,6 +7,9 @@
     "dev:cf": "wrangler dev",
     "deploy:cf": "wrangler deploy"
   },
+  "dependencies": {
+    "@plannotator/github": "workspace:*"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
     "wrangler": "^3.99.0"

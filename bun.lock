@@ -78,6 +78,9 @@
     "apps/paste-service": {
       "name": "@plannotator/paste-service",
       "version": "0.1.0",
+      "dependencies": {
+        "@plannotator/github": "workspace:*",
+      },
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20241218.0",
         "wrangler": "^3.99.0",
@@ -159,6 +162,9 @@
     "packages/github": {
       "name": "@plannotator/github",
       "version": "0.0.1",
+      "dependencies": {
+        "@plannotator/ui": "workspace:*",
+      },
       "peerDependencies": {
         "react": ">=18",
       },
