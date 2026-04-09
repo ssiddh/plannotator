@@ -62,7 +62,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **THREAD-03**: Summary annotations synced to GitHub as final reply in thread
 - [x] **THREAD-04**: Thread resolved on GitHub when summary annotation synced (GraphQL mutation)
 - [x] **THREAD-05**: User can submit PR review (approve/request changes) from Plannotator
-- [ ] **THREAD-06**: Review submission includes all outbound annotations as review comments
+- [x] **THREAD-06**: Review submission includes all outbound annotations as review comments
 - [x] **THREAD-07**: Resolved thread status displayed in Plannotator UI
 
 ### Data Model & Sync State
@@ -160,7 +160,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | THREAD-03 | Phase 7 | Pending |
 | THREAD-04 | Phase 7 | Complete |
 | THREAD-05 | Phase 7 | Complete |
-| THREAD-06 | Phase 7 | Pending |
+| THREAD-06 | Phase 7 | Complete |
 | THREAD-07 | Phase 7 | Complete |
 
 **Coverage:**
