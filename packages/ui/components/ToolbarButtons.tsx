@@ -264,16 +264,5 @@ export const SyncButton: React.FC<SyncButtonProps> = ({
         {newCount > 9 ? "9+" : newCount}
       </span>
     )}
-=======
-    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-      disabled || isLoading
-        ? 'opacity-50 cursor-not-allowed bg-muted text-muted-foreground'
-        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-    }`}
-    title={title}
-  >
-    <span className="md:hidden">{isLoading ? '...' : '✕'}</span>
-    <span className="hidden md:inline">{isLoading ? 'Closing...' : 'Close'}</span>
->>>>>>> upstream/main
   </button>
 );
