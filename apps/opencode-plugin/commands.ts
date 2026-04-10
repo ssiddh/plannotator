@@ -20,6 +20,7 @@ import {
 } from "@plannotator/server/annotate";
 import { getGitContext, runGitDiffWithContext } from "@plannotator/server/git";
 import { parsePRUrl, checkPRAuth, fetchPR, getCliName, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
+import { loadConfig, resolveDefaultDiffType } from "@plannotator/shared/config";
 import { resolveMarkdownFile } from "@plannotator/shared/resolve-file";
 
 /** Shared dependencies injected by the plugin */
@@ -45,6 +46,7 @@ export async function handleReviewCommand(
   let rawPatch: string;
   let gitRef: string;
   let diffError: string | undefined;
+  let userDiffType: import("@plannotator/shared/config").DefaultDiffType | undefined;
   let gitContext: Awaited<ReturnType<typeof getGitContext>> | undefined;
   let prMetadata: Awaited<ReturnType<typeof fetchPR>>["metadata"] | undefined;
 
@@ -78,7 +80,8 @@ export async function handleReviewCommand(
     client.app.log({ level: "info", message: "Opening code review UI..." });
 
     gitContext = await getGitContext(directory);
-    const diffResult = await runGitDiffWithContext("uncommitted", gitContext);
+    userDiffType = resolveDefaultDiffType(loadConfig());
+    const diffResult = await runGitDiffWithContext(userDiffType, gitContext);
     rawPatch = diffResult.patch;
     gitRef = diffResult.label;
     diffError = diffResult.error;
@@ -89,7 +92,7 @@ export async function handleReviewCommand(
     gitRef,
     error: diffError,
     origin: "opencode",
-    diffType: isPRMode ? undefined : "uncommitted",
+    diffType: isPRMode ? undefined : userDiffType,
     gitContext,
     prMetadata,
     sharingEnabled: await getSharingEnabled(),
@@ -102,6 +105,10 @@ export async function handleReviewCommand(
   const result = await server.waitForDecision();
   await Bun.sleep(1500);
   server.stop();
+
+  if (result.exit) {
+    return;
+  }
 
   if (result.feedback) {
     // @ts-ignore - Event properties contain sessionID
@@ -180,6 +187,10 @@ export async function handleAnnotateCommand(
   const result = await server.waitForDecision();
   await Bun.sleep(1500);
   server.stop();
+
+  if (result.exit) {
+    return;
+  }
 
   if (result.feedback) {
     // @ts-ignore - Event properties contain sessionID
@@ -265,6 +276,10 @@ export async function handleAnnotateLastCommand(
   const result = await server.waitForDecision();
   await Bun.sleep(1500);
   server.stop();
+
+  if (result.exit) {
+    return null;
+  }
 
   return result.feedback || null;
 }

@@ -8,7 +8,8 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import hljs from "highlight.js";
-import { parseMarkdownToBlocks } from "../../utils/parser";
+import { parseMarkdownToBlocks, computeListIndices } from "../../utils/parser";
+import { ListMarker } from "../ListMarker";
 import type { Block, Annotation, EditorMode, ImageAttachment } from "../../types";
 import { AnnotationType } from "../../types";
 import type { PlanDiffBlock } from "../../utils/planDiffEngine";
@@ -409,17 +410,29 @@ const MarkdownChunk: React.FC<{ content: string }> = ({ content }) => {
     () => parseMarkdownToBlocks(content),
     [content]
   );
+  // Compute ordered-list display indices across the entire chunk so every
+  // list-item gets the right numeral even though we don't group here.
+  // Non-list blocks pass through as `null` and act as streak-breaks — same
+  // behavior as the main Viewer's per-group counter.
+  const orderedIndices = React.useMemo(
+    () => computeListIndices(blocks),
+    [blocks]
+  );
 
   return (
     <>
-      {blocks.map((block) => (
-        <SimpleBlockRenderer key={block.id} block={block} />
+      {blocks.map((block, i) => (
+        <SimpleBlockRenderer
+          key={block.id}
+          block={block}
+          orderedIndex={orderedIndices[i]}
+        />
       ))}
     </>
   );
 };
 
-const SimpleBlockRenderer: React.FC<{ block: Block }> = ({ block }) => {
+const SimpleBlockRenderer: React.FC<{ block: Block; orderedIndex?: number | null }> = ({ block, orderedIndex }) => {
   switch (block.type) {
     case "heading": {
       const Tag = `h${block.level || 1}` as keyof React.JSX.IntrinsicElements;
@@ -437,12 +450,20 @@ const SimpleBlockRenderer: React.FC<{ block: Block }> = ({ block }) => {
       );
     }
 
-    case "blockquote":
+    case "blockquote": {
+      // Split on blank-line paragraph breaks so merged `> a\n>\n> b`
+      // renders as two <p> children instead of collapsing to one line.
+      const paragraphs = block.content.split(/\n\n+/);
       return (
         <blockquote className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic">
-          <InlineMarkdown text={block.content} />
+          {paragraphs.map((para, i) => (
+            <p key={i} className={i > 0 ? "mt-2" : ""}>
+              <InlineMarkdown text={para} />
+            </p>
+          ))}
         </blockquote>
       );
+    }
 
     case "list-item": {
       const indent = (block.level || 0) * 1.25;
@@ -452,43 +473,12 @@ const SimpleBlockRenderer: React.FC<{ block: Block }> = ({ block }) => {
           className="flex gap-3 my-1.5"
           style={{ marginLeft: `${indent}rem` }}
         >
-          <span className="select-none shrink-0 flex items-center">
-            {isCheckbox ? (
-              block.checked ? (
-                <svg
-                  className="w-4 h-4 text-success"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="w-4 h-4 text-muted-foreground/50"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-              )
-            ) : (
-              <span className="text-primary/60">
-                {(block.level || 0) === 0
-                  ? "\u2022"
-                  : (block.level || 0) === 1
-                    ? "\u25E6"
-                    : "\u25AA"}
-              </span>
-            )}
-          </span>
+          <ListMarker
+            level={block.level || 0}
+            ordered={block.ordered}
+            orderedIndex={orderedIndex}
+            checked={block.checked}
+          />
           <span
             className={`text-sm leading-relaxed ${isCheckbox && block.checked ? "text-muted-foreground line-through" : "text-foreground/90"}`}
           >
@@ -587,9 +577,11 @@ const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
+  let previousChar = "";
 
   while (remaining.length > 0) {
-    let match = remaining.match(/^\*\*(.+?)\*\*/);
+    // Bold: **text** ([\s\S]+? allows matching across hard line breaks)
+    let match = remaining.match(/^\*\*([\s\S]+?)\*\*/);
     if (match) {
       parts.push(
         <strong key={key++} className="font-semibold">
@@ -597,13 +589,26 @@ const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
         </strong>
       );
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
-    match = remaining.match(/^\*(.+?)\*/);
+    // Italic: *text* or _text_ (avoid intraword underscores)
+    match = remaining.match(/^\*([\s\S]+?)\*/);
     if (match) {
       parts.push(<em key={key++}><InlineMarkdown text={match[1]} /></em>);
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    match = !/\w/.test(previousChar)
+      ? remaining.match(/^_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)/)
+      : null;
+    if (match) {
+      parts.push(<em key={key++}><InlineMarkdown text={match[1]} /></em>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -618,6 +623,7 @@ const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
         </code>
       );
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -635,16 +641,33 @@ const InlineMarkdown: React.FC<{ text: string }> = ({ text }) => {
         </a>
       );
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
-    const nextSpecial = remaining.slice(1).search(/[*`[]/);
+    // Hard line break: two+ trailing spaces + newline, or backslash + newline
+    match = remaining.match(/ {2,}\n|\\\n/);
+    if (match && match.index !== undefined) {
+      const before = remaining.slice(0, match.index);
+      if (before) {
+        parts.push(<InlineMarkdown key={key++} text={before} />);
+      }
+      parts.push(<br key={key++} />);
+      remaining = remaining.slice(match.index + match[0].length);
+      previousChar = "\n";
+      continue;
+    }
+
+    const nextSpecial = remaining.slice(1).search(/[\*_`\[!]/);
     if (nextSpecial === -1) {
       parts.push(remaining);
+      previousChar = remaining[remaining.length - 1] || previousChar;
       break;
     } else {
-      parts.push(remaining.slice(0, nextSpecial + 1));
+      const plainText = remaining.slice(0, nextSpecial + 1);
+      parts.push(plainText);
       remaining = remaining.slice(nextSpecial + 1);
+      previousChar = plainText[plainText.length - 1] || previousChar;
     }
   }
 

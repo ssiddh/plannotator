@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 
 import { contentHash, deleteDraft } from "../generated/draft.js";
@@ -45,11 +46,21 @@ import {
 	handleObsidianVaultsRequest,
 } from "./reference.js";
 
+export interface PlanReviewDecision {
+	approved: boolean;
+	feedback?: string;
+	savedPath?: string;
+	agentSwitch?: string;
+	permissionMode?: string;
+}
+
 export interface PlanServerResult {
+	reviewId: string;
 	port: number;
 	portSource: "env" | "remote-default" | "random";
 	url: string;
-	waitForDecision: () => Promise<{ approved: boolean; feedback?: string; savedPath?: string; agentSwitch?: string; permissionMode?: string }>;
+	waitForDecision: () => Promise<PlanReviewDecision>;
+	onDecision: (listener: (result: PlanReviewDecision) => void | Promise<void>) => () => void;
 	waitForDone?: () => Promise<void>;
 	stop: () => void;
 }
@@ -114,22 +125,24 @@ export async function startPlanReviewServer(options: {
 				}
 			: null;
 
-	let resolveDecision!: (result: {
-		approved: boolean;
-		feedback?: string;
-		savedPath?: string;
-		agentSwitch?: string;
-		permissionMode?: string;
-	}) => void;
-	const decisionPromise = new Promise<{
-		approved: boolean;
-		feedback?: string;
-		savedPath?: string;
-		agentSwitch?: string;
-		permissionMode?: string;
-	}>((r) => {
+	const reviewId = randomUUID();
+	let resolveDecision!: (result: PlanReviewDecision) => void;
+	const decisionListeners = new Set<(result: PlanReviewDecision) => void | Promise<void>>();
+	let decisionSettled = false;
+	const decisionPromise = new Promise<PlanReviewDecision>((r) => {
 		resolveDecision = r;
 	});
+	const publishDecision = (result: PlanReviewDecision): boolean => {
+		if (decisionSettled) return false;
+		decisionSettled = true;
+		resolveDecision(result);
+		for (const listener of decisionListeners) {
+			Promise.resolve(listener(result)).catch((error) => {
+				console.error("[Plan Review] Decision listener failed:", error);
+			});
+		}
+		return true;
+	};
 
 	// Draft key for annotation persistence
 	const draftKey = options.mode !== "archive" ? contentHash(options.plan) : "";
@@ -212,10 +225,11 @@ export async function startPlanReviewServer(options: {
 			}
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown> };
+				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
 				const toSave: Record<string, unknown> = {};
 				if (body.displayName !== undefined) toSave.displayName = body.displayName;
 				if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
+				if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
 				if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
 				json(res, { ok: true });
 			} catch {
@@ -324,6 +338,10 @@ export async function startPlanReviewServer(options: {
 			}
 			json(res, { ok: true, results });
 		} else if (url.pathname === "/api/approve" && req.method === "POST") {
+			if (decisionSettled) {
+				json(res, { ok: true, duplicate: true });
+				return;
+			}
 			let feedback: string | undefined;
 			let agentSwitch: string | undefined;
 			let requestedPermissionMode: string | undefined;
@@ -390,7 +408,7 @@ export async function startPlanReviewServer(options: {
 			}
 			deleteDraft(draftKey);
 			const effectivePermissionMode = requestedPermissionMode || options.permissionMode;
-			resolveDecision({
+			publishDecision({
 				approved: true,
 				feedback,
 				savedPath,
@@ -399,6 +417,10 @@ export async function startPlanReviewServer(options: {
 			});
 			json(res, { ok: true, savedPath });
 		} else if (url.pathname === "/api/deny" && req.method === "POST") {
+			if (decisionSettled) {
+				json(res, { ok: true, duplicate: true });
+				return;
+			}
 			let feedback = "Plan rejected by user";
 			let planSaveEnabled = true;
 			let planSaveCustomPath: string | undefined;
@@ -425,7 +447,7 @@ export async function startPlanReviewServer(options: {
 				);
 			}
 			deleteDraft(draftKey);
-			resolveDecision({ approved: false, feedback, savedPath });
+			publishDecision({ approved: false, feedback, savedPath });
 			json(res, { ok: true, savedPath });
 		} else {
 			html(res, options.htmlContent);
@@ -435,10 +457,17 @@ export async function startPlanReviewServer(options: {
 	const { port, portSource } = await listenOnPort(server);
 
 	return {
+		reviewId,
 		port,
 		portSource,
 		url: `http://localhost:${port}`,
 		waitForDecision: () => decisionPromise,
+		onDecision: (listener) => {
+			decisionListeners.add(listener);
+			return () => {
+				decisionListeners.delete(listener);
+			};
+		},
 		...(donePromise && { waitForDone: () => donePromise }),
 		stop: () => server.close(),
 	};

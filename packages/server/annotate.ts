@@ -7,7 +7,7 @@
  * render it without modifications.
  *
  * Environment variables:
- *   PLANNOTATOR_REMOTE - Set to "1" or "true" for remote/devcontainer mode
+ *   PLANNOTATOR_REMOTE - Set to "1"/"true" for remote, "0"/"false" for local
  *   PLANNOTATOR_PORT   - Fixed port to use (default: random locally, 19432 for remote)
  */
 
@@ -15,7 +15,7 @@ import { isRemoteSession, getServerPort } from "./remote";
 import { getRepoInfo } from "./repo";
 import type { Origin } from "@plannotator/shared/agents";
 import { handleImage, handleUpload, handleServerReady, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon } from "./shared-handlers";
-import { handleDoc, handleFileBrowserFiles } from "./reference-handlers";
+import { handleDoc, handleFileBrowserFiles, handleObsidianVaults, handleObsidianFiles, handleObsidianDoc } from "./reference-handlers";
 import { contentHash, deleteDraft } from "./draft";
 import { createExternalAnnotationHandler } from "./external-annotations";
 import { saveConfig, detectGitUser, getServerConfig } from "./config";
@@ -63,6 +63,7 @@ export interface AnnotateServerResult {
   waitForDecision: () => Promise<{
     feedback: string;
     annotations: unknown[];
+    exit?: boolean;
   }>;
   /** Stop the server */
   stop: () => void;
@@ -111,10 +112,12 @@ export async function startAnnotateServer(
   let resolveDecision: (result: {
     feedback: string;
     annotations: unknown[];
+    exit?: boolean;
   }) => void;
   const decisionPromise = new Promise<{
     feedback: string;
     annotations: unknown[];
+    exit?: boolean;
   }>((resolve) => {
     resolveDecision = resolve;
   });
@@ -150,10 +153,12 @@ export async function startAnnotateServer(
           // API: Update user config (write-back to ~/.plannotator/config.json)
           if (url.pathname === "/api/config" && req.method === "POST") {
             try {
-              const body = (await req.json()) as { displayName?: string; diffOptions?: Record<string, unknown> };
+              const body = (await req.json()) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean; conventionalLabels?: unknown[] | null };
               const toSave: Record<string, unknown> = {};
               if (body.displayName !== undefined) toSave.displayName = body.displayName;
               if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
+              if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
+              if (body.conventionalLabels !== undefined) toSave.conventionalLabels = body.conventionalLabels;
               if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
               return Response.json({ ok: true });
             } catch {
@@ -175,6 +180,21 @@ export async function startAnnotateServer(
               return handleDoc(new Request(docUrl.toString()));
             }
             return handleDoc(req);
+          }
+
+          // API: Detect Obsidian vaults
+          if (url.pathname === "/api/obsidian/vaults") {
+            return handleObsidianVaults();
+          }
+
+          // API: List Obsidian vault files as a tree
+          if (url.pathname === "/api/reference/obsidian/files" && req.method === "GET") {
+            return handleObsidianFiles(req);
+          }
+
+          // API: Read an Obsidian vault document
+          if (url.pathname === "/api/reference/obsidian/doc" && req.method === "GET") {
+            return handleObsidianDoc(req);
           }
 
           // API: List markdown files in a directory as a tree
@@ -199,6 +219,13 @@ export async function startAnnotateServer(
             disableIdleTimeout: () => server.timeout(req, 0),
           });
           if (externalResponse) return externalResponse;
+
+          // API: Exit annotation session without feedback
+          if (url.pathname === "/api/exit" && req.method === "POST") {
+            deleteDraft(draftKey);
+            resolveDecision({ feedback: "", annotations: [], exit: true });
+            return Response.json({ ok: true });
+          }
 
           // API: Submit annotation feedback
           if (url.pathname === "/api/feedback" && req.method === "POST") {
@@ -231,6 +258,14 @@ export async function startAnnotateServer(
           return new Response(htmlContent, {
             headers: { "Content-Type": "text/html" },
           });
+        },
+
+        error(err) {
+          console.error("[plannotator] Server error:", err);
+          return new Response(
+            `Internal Server Error: ${err instanceof Error ? err.message : String(err)}`,
+            { status: 500, headers: { "Content-Type": "text/plain" } },
+          );
         },
       });
 

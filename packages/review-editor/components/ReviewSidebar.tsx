@@ -2,26 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { CodeAnnotation, type EditorAnnotation } from '@plannotator/ui/types';
 import { isCurrentUser } from '@plannotator/ui/utils/identity';
 import { EditorAnnotationCard } from '@plannotator/ui/components/EditorAnnotationCard';
+import { CopyButton } from './CopyButton';
+import { ConventionalLabelBadge } from './ConventionalLabelPicker';
 import { HighlightedCode } from './HighlightedCode';
 import { detectLanguage } from '../utils/detectLanguage';
 import { renderInlineMarkdown } from '../utils/renderInlineMarkdown';
-import { usePRContext } from '../hooks/usePRContext';
 import { formatRelativeTime } from '../utils/formatRelativeTime';
-import { PRSummaryTab } from './PRSummaryTab';
-import { PRCommentsTab } from './PRCommentsTab';
-import { PRChecksTab } from './PRChecksTab';
 import { AITab } from './AITab';
 import { SparklesIcon } from './SparklesIcon';
-import { ReviewAgentsIcon } from './ReviewAgentsIcon';
+import { ReviewAgentsIcon } from '@plannotator/ui/components/ReviewAgentsIcon';
 import { AgentsTab } from '@plannotator/ui/components/AgentsTab';
 import type { PRMetadata } from '@plannotator/shared/pr-provider';
+import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
 import type { AIChatEntry } from '../hooks/useAIChat';
 import type { AgentJobInfo, AgentCapabilities } from '@plannotator/ui/types';
 import type { DiffFile } from '../types';
 
-type ReviewPanelTab = 'annotations' | 'ai' | 'agents' | 'summary' | 'comments' | 'checks';
+type ReviewSidebarTab = 'annotations' | 'ai' | 'agents';
 
-interface ReviewPanelProps {
+const REVIEW_AGENTS_ENABLED = true;
+
+interface ReviewSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   annotations: CodeAnnotation[];
@@ -40,8 +41,8 @@ interface ReviewPanelProps {
   isAICreatingSession?: boolean;
   isAIStreaming?: boolean;
   onScrollToAILines?: (filePath: string, lineStart: number, lineEnd: number, side: 'old' | 'new') => void;
-  activeTabOverride?: ReviewPanelTab;
-  onTabChange?: (tab: ReviewPanelTab) => void;
+  activeTabOverride?: ReviewSidebarTab;
+  onTabChange?: (tab: ReviewSidebarTab) => void;
   activeFilePath?: string;
   scrollToQuestionId?: string | null;
   onAskGeneral?: (question: string) => void;
@@ -58,6 +59,8 @@ interface ReviewPanelProps {
   onAgentKillJob?: (id: string) => void;
   onAgentKillAll?: () => void;
   externalAnnotations?: Array<{ source?: string }>;
+  onOpenJobDetail?: (jobId: string) => void;
+  onOpenPRPanel?: (type: 'summary' | 'comments' | 'checks') => void;
 }
 
 const SuggestionPreview: React.FC<{ code: string; originalCode?: string; language?: string }> = ({ code, originalCode, language }) => {
@@ -105,30 +108,8 @@ function compareCodeAnnotations(a: CodeAnnotation, b: CodeAnnotation): number {
     : a.lineStart - b.lineStart;
 }
 
-const PR_TABS: { id: ReviewPanelTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'annotations', label: 'Annotations', icon: (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-    </svg>
-  )},
-  { id: 'summary', label: 'Summary', icon: (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  )},
-  { id: 'comments', label: 'Comments', icon: (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-    </svg>
-  )},
-  { id: 'checks', label: 'Checks', icon: (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  )},
-];
 
-export const ReviewPanel: React.FC<ReviewPanelProps> = ({
+export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
   isOpen,
   onToggle,
   annotations,
@@ -163,40 +144,35 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
   onAgentKillJob,
   onAgentKillAll,
   externalAnnotations,
+  onOpenJobDetail,
+  onOpenPRPanel,
 }) => {
   const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<ReviewPanelTab>('annotations');
-  const hasPRTabs = !!prMetadata;
-  const hasAgents = !!agentCapabilities?.available;
+  const [activeTab, setActiveTab] = useState<ReviewSidebarTab>('annotations');
+  const hasAgents = REVIEW_AGENTS_ENABLED && !!agentCapabilities?.available;
   const runningAgentCount = (agentJobs ?? []).filter(j => j.status === 'running' || j.status === 'starting').length;
 
   // Allow parent to control the active tab (e.g., switch to AI tab on ask)
   useEffect(() => {
-    if (activeTabOverride) setActiveTab(activeTabOverride);
+    if (!activeTabOverride) return;
+    if (activeTabOverride === 'agents' && !REVIEW_AGENTS_ENABLED) {
+      setActiveTab('annotations');
+      return;
+    }
+    setActiveTab(activeTabOverride);
   }, [activeTabOverride]);
 
-  const { prContext, isLoading: isPRContextLoading, error: prContextError, fetchContext } = usePRContext(prMetadata ?? null);
-
-  // Fetch PR context on first click of a PR tab
-  const handleTabChange = (tab: ReviewPanelTab) => {
+  const handleTabChange = (tab: ReviewSidebarTab | 'summary' | 'comments' | 'checks') => {
+    // PR tabs open as center dock panels instead of rendering in the sidebar
+    if (tab === 'summary' || tab === 'comments' || tab === 'checks') {
+      onOpenPRPanel?.(tab);
+      return;
+    }
+    if (tab === 'agents' && !REVIEW_AGENTS_ENABLED) return;
     setActiveTab(tab);
     onTabChange?.(tab);
-    if (tab !== 'annotations' && tab !== 'ai' && tab !== 'agents' && !prContext && !isPRContextLoading) {
-      fetchContext();
-    }
   };
-
-  // Small status dot for checks tab
-  const checksStatusDot = prContext
-    ? prContext.checks.some(c => c.conclusion === 'FAILURE' || c.conclusion === 'TIMED_OUT')
-      ? 'bg-destructive'
-      : prContext.checks.some(c => c.status !== 'COMPLETED')
-        ? 'bg-yellow-500'
-        : prContext.checks.length > 0
-          ? 'bg-success'
-          : null
-    : null;
 
   const handleQuickCopy = async () => {
     if (!feedbackMarkdown) return;
@@ -229,8 +205,8 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
     <aside className="border-l border-border/50 bg-card/30 backdrop-blur-sm flex flex-col flex-shrink-0" style={{ width: width ?? 288 }}>
         {/* Header */}
         <div className="px-3 flex items-center border-b border-border/50" style={{ height: 'var(--panel-header-h)' }}>
-          <div className="flex items-center gap-2 w-full">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-2 w-full min-w-0">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate shrink">
               {activeTab === 'annotations' ? 'Annotations' : activeTab === 'ai' ? 'AI' : activeTab === 'agents' ? 'Review Agents' : activeTab === 'summary' ? 'Summary' : activeTab === 'comments' ? 'Comments' : 'Checks'}
             </h2>
             {activeTab === 'annotations' && totalCount > 0 && (
@@ -249,18 +225,18 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
               </span>
             )}
 
-            <div className="flex items-center gap-0.5 ml-auto">
+            <div className="flex items-center gap-0.5 ml-auto shrink-0">
               {/* Annotations tab (always visible) */}
               <button
                 onClick={() => handleTabChange('annotations')}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-[10px] font-medium transition-colors duration-150 ${
                   activeTab === 'annotations'
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Annotations"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                 </svg>
               </button>
@@ -269,14 +245,14 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
               {aiAvailable && (
                 <button
                   onClick={() => handleTabChange('ai')}
-                  className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                  className={`relative flex items-center gap-1 px-2.5 py-1.5 rounded text-[10px] font-medium transition-colors duration-150 ${
                     activeTab === 'ai'
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   }`}
                   title="AI Chat"
                 >
-                  <SparklesIcon className="w-3.5 h-3.5" />
+                  <SparklesIcon className="w-4 h-4" />
                   {aiMessages.length > 0 && activeTab !== 'ai' && (
                     <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
                   )}
@@ -287,44 +263,27 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
               {hasAgents && (
                 <button
                   onClick={() => handleTabChange('agents')}
-                  className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                  className={`relative flex items-center gap-1 px-2.5 py-1.5 rounded text-[10px] font-medium transition-colors duration-150 ${
                     activeTab === 'agents'
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   }`}
                   title="Review Agents"
                 >
-                  <ReviewAgentsIcon />
+                  <ReviewAgentsIcon className="w-4 h-4" />
                   {runningAgentCount > 0 && activeTab !== 'agents' && (
                     <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary animate-pulse" />
                   )}
                 </button>
               )}
 
-              {/* PR tabs (only in PR mode) */}
-              {hasPRTabs && PR_TABS.filter(t => t.id !== 'annotations').map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                  title={tab.label}
-                >
-                  {tab.icon}
-                  {tab.id === 'checks' && checksStatusDot && (
-                    <span className={`w-1.5 h-1.5 rounded-full ${checksStatusDot}`} />
-                  )}
-                </button>
-              ))}
+              {/* PR tabs moved to header — see App.tsx */}
             </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <OverlayScrollArea className="flex-1 min-h-0">
           {/* Annotations tab */}
           {activeTab === 'annotations' && (
             <div className="p-2 space-y-1.5">
@@ -343,7 +302,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                 <div className="p-2 space-y-4">
                   {Array.from(groupedAnnotations.entries()).map(([filePath, fileAnnotations]) => (
                     <div key={filePath}>
-                      <div className="px-2 py-1 text-xs font-mono text-muted-foreground truncate">
+                      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-mono text-muted-foreground truncate">
                         {filePath.split('/').pop()}
                       </div>
                       <div className="space-y-1">
@@ -354,10 +313,10 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                             <div
                               key={annotation.id}
                               onClick={() => onSelectAnnotation(annotation.id)}
-                              className={`group relative p-2.5 rounded-lg border cursor-pointer transition-all ${
+                              className={`group relative p-2.5 rounded border cursor-pointer transition-colors duration-150 ${
                                 isSelected
-                                  ? 'bg-primary/5 border-primary/30 shadow-sm'
-                                  : 'border-transparent hover:bg-muted/50 hover:border-border/50'
+                                  ? 'bg-primary/5 border-primary/30'
+                                  : 'border-transparent hover:bg-muted/30'
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1.5">
@@ -371,7 +330,13 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                                       {annotation.lineStart === annotation.lineEnd
                                         ? `L${annotation.lineStart}`
                                         : `L${annotation.lineStart}-${annotation.lineEnd}`}
+                                      {annotation.tokenText && (
+                                        <span className="ml-1 text-primary/70">{`\`${annotation.tokenText.length > 30 ? annotation.tokenText.slice(0, 27) + '...' : annotation.tokenText}\``}</span>
+                                      )}
                                     </span>
+                                  )}
+                                  {annotation.conventionalLabel && (
+                                    <ConventionalLabelBadge label={annotation.conventionalLabel} decorations={annotation.decorations} />
                                   )}
                                   {annotation.author && (
                                     <span className={`text-[10px] truncate max-w-[100px] ${isCurrentUser(annotation.author) ? 'text-muted-foreground/50' : 'text-muted-foreground/70'}`}>
@@ -393,18 +358,24 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
                                   <SuggestionPreview code={annotation.suggestedCode} originalCode={annotation.originalCode} language={detectLanguage(annotation.filePath)} />
                                 </div>
                               )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDeleteAnnotation(annotation.id);
-                                }}
-                                className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
-                                title="Delete annotation"
-                              >
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
+                              {/* Actions — visible on hover */}
+                              <div className="flex items-center justify-end gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {annotation.text && (
+                                  <CopyButton text={`${annotation.filePath}:${annotation.lineStart}${annotation.lineEnd !== annotation.lineStart ? `-${annotation.lineEnd}` : ''}\n${annotation.text}${annotation.reasoning ? `\n\nReasoning: ${annotation.reasoning}` : ''}`} variant="inline" />
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteAnnotation(annotation.id);
+                                  }}
+                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                  title="Delete annotation"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -465,45 +436,18 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
               onKillJob={onAgentKillJob ?? (() => {})}
               onKillAll={onAgentKillAll ?? (() => {})}
               externalAnnotations={externalAnnotations ?? []}
+              onOpenJobDetail={onOpenJobDetail}
             />
           )}
 
-          {/* PR tabs — loading / error / content */}
-          {activeTab !== 'annotations' && activeTab !== 'ai' && activeTab !== 'agents' && (
-            <>
-              {isPRContextLoading && (
-                <div className="flex items-center justify-center h-40">
-                  <div className="text-xs text-muted-foreground">Loading...</div>
-                </div>
-              )}
-              {prContextError && (
-                <div className="p-4 text-center">
-                  <p className="text-xs text-destructive">{prContextError}</p>
-                  <button
-                    onClick={() => fetchContext()}
-                    className="mt-2 text-xs text-primary hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {prContext && prMetadata && (
-                <>
-                  {activeTab === 'summary' && <PRSummaryTab context={prContext} metadata={prMetadata} />}
-                  {activeTab === 'comments' && <PRCommentsTab context={prContext} />}
-                  {activeTab === 'checks' && <PRChecksTab context={prContext} />}
-                </>
-              )}
-            </>
-          )}
-        </div>
+        </OverlayScrollArea>
 
         {/* Quick Copy Footer — annotations tab only */}
         {activeTab === 'annotations' && feedbackMarkdown && totalCount > 0 && (
           <div className="p-2 border-t border-border/50">
             <button
               onClick={handleQuickCopy}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
               {copied ? (
                 <>

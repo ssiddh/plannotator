@@ -7,6 +7,7 @@ interface FileTreeNodeProps {
   onToggleFolder: (path: string) => void;
   activeFileIndex: number;
   onSelectFile: (index: number) => void;
+  onDoubleClickFile?: (index: number) => void;
   viewedFiles: Set<string>;
   onToggleViewed?: (filePath: string) => void;
   hideViewedFiles: boolean;
@@ -37,13 +38,14 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   onToggleFolder,
   activeFileIndex,
   onSelectFile,
+  onDoubleClickFile,
   viewedFiles,
   onToggleViewed,
   hideViewedFiles,
   getAnnotationCount,
   stagedFiles,
 }) => {
-  const paddingLeft = 8 + node.depth * 12;
+  const paddingLeft = 4 + node.depth * 8;
 
   if (node.type === 'folder') {
     if (!hasVisibleChildren(node, viewedFiles, activeFileIndex, hideViewedFiles)) {
@@ -84,6 +86,7 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
             onToggleFolder={onToggleFolder}
             activeFileIndex={activeFileIndex}
             onSelectFile={onSelectFile}
+            onDoubleClickFile={onDoubleClickFile}
             viewedFiles={viewedFiles}
             onToggleViewed={onToggleViewed}
             hideViewedFiles={hideViewedFiles}
@@ -108,8 +111,9 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   return (
     <button
       onClick={() => onSelectFile(node.fileIndex!)}
+      onDoubleClick={() => onDoubleClickFile?.(node.fileIndex!)}
       className={`file-tree-item w-full text-left group ${isActive ? 'active' : ''} ${annotationCount > 0 ? 'has-annotations' : ''} ${isStaged ? 'staged' : ''}`}
-      style={{ paddingLeft: paddingLeft + 15 }}
+      style={{ paddingLeft }}
     >
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         <span

@@ -32,6 +32,27 @@ curl -fsSL https://plannotator.ai/install.cmd -o install.cmd && install.cmd && d
 
 The install script respects `CLAUDE_CONFIG_DIR` if set, placing hooks in your custom config directory instead of `~/.claude`.
 
+<details>
+<summary><strong>Pin a specific version</strong></summary>
+
+```bash
+curl -fsSL https://plannotator.ai/install.sh | bash -s -- --version vX.Y.Z
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://plannotator.ai/install.ps1))) -Version vX.Y.Z
+```
+
+```cmd
+curl -fsSL https://plannotator.ai/install.cmd -o install.cmd && install.cmd --version vX.Y.Z && del install.cmd
+```
+
+Version pinning is fully supported from **v0.17.2 onwards**. v0.17.2 is the first release to ship native ARM64 Windows binaries and SLSA build-provenance attestations. Pinning to a pre-v0.17.2 tag may work for default installs on macOS, Linux, and x64 Windows, but ARM64 Windows hosts will get a 404 and provenance verification will be rejected.
+
+</details>
+
+Every release includes SHA256 checksums (verified automatically) and optional [SLSA build provenance](/docs/reference/verifying-your-install/) attestations.
+
 ## Claude Code
 
 ### Plugin marketplace (recommended)

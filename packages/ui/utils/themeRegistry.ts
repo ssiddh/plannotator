@@ -69,6 +69,26 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
     },
   },
   {
+    id: 'cursor-hc',
+    name: 'Clean Contrast',
+    builtIn: true,
+    modeSupport: 'dark-only',
+    colors: {
+      dark: { primary: '#88C0D0', secondary: '#434C5E', accent: '#EBCB8B', background: '#0A0A0A', foreground: '#D8DEE9' },
+      light: { primary: '#88C0D0', secondary: '#434C5E', accent: '#EBCB8B', background: '#0A0A0A', foreground: '#D8DEE9' },
+    },
+  },
+  {
+    id: 'cursor',
+    name: 'Code Fork',
+    builtIn: true,
+    modeSupport: 'both',
+    colors: {
+      dark: { primary: '#81A1C1', secondary: '#2a2a2a', accent: '#88C0D0', background: '#181818', foreground: '#E4E4E4' },
+      light: { primary: '#3C7CAB', secondary: '#E8E8E8', accent: '#4C7F8C', background: '#FCFCFC', foreground: '#141414' },
+    },
+  },
+  {
     id: 'doom-64',
     name: 'Doom 64',
     builtIn: true,
@@ -99,6 +119,36 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
     },
   },
   {
+    id: 'kanagawa-dragon',
+    name: 'Kanagawa Dragon',
+    builtIn: true,
+    modeSupport: 'dark-only',
+    colors: {
+      dark: { primary: '#7fb4ca', secondary: '#2a2625', accent: '#7aa89f', background: '#181616', foreground: '#c8c093' },
+      light: { primary: '#7fb4ca', secondary: '#2a2625', accent: '#7aa89f', background: '#181616', foreground: '#c8c093' },
+    },
+  },
+  {
+    id: 'kanagawa-lotus',
+    name: 'Kanagawa Lotus',
+    builtIn: true,
+    modeSupport: 'light-only',
+    colors: {
+      dark: { primary: '#4d699b', secondary: '#dcd5ac', accent: '#624c83', background: '#f2ecbc', foreground: '#545464' },
+      light: { primary: '#4d699b', secondary: '#dcd5ac', accent: '#624c83', background: '#f2ecbc', foreground: '#545464' },
+    },
+  },
+  {
+    id: 'kanagawa-wave',
+    name: 'Kanagawa Wave',
+    builtIn: true,
+    modeSupport: 'dark-only',
+    colors: {
+      dark: { primary: '#7e9cd8', secondary: '#363646', accent: '#957fb8', background: '#1f1f28', foreground: '#dcd7ba' },
+      light: { primary: '#7e9cd8', secondary: '#363646', accent: '#957fb8', background: '#1f1f28', foreground: '#dcd7ba' },
+    },
+  },
+  {
     id: 'monokai-pro',
     name: 'Monokai Pro',
     builtIn: true,
@@ -106,6 +156,16 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
     colors: {
       dark: { primary: '#ffd866', secondary: '#5b595c', accent: '#78dce8', background: '#2d2a2e', foreground: '#fcfcfa' },
       light: { primary: '#ffd866', secondary: '#5b595c', accent: '#78dce8', background: '#2d2a2e', foreground: '#fcfcfa' },
+    },
+  },
+  {
+    id: 'cursor-midnight',
+    name: 'Midnight',
+    builtIn: true,
+    modeSupport: 'dark-only',
+    colors: {
+      dark: { primary: '#88C0D0', secondary: '#434C5E', accent: '#8FBCBB', background: '#1e2127', foreground: '#D8DEE9' },
+      light: { primary: '#88C0D0', secondary: '#434C5E', accent: '#8FBCBB', background: '#1e2127', foreground: '#D8DEE9' },
     },
   },
   {

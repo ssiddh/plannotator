@@ -4,7 +4,7 @@
  * Provides a consistent server implementation for both Claude Code and OpenCode plugins.
  *
  * Environment variables:
- *   PLANNOTATOR_REMOTE - Set to "1" or "true" for remote/devcontainer mode
+ *   PLANNOTATOR_REMOTE - Set to "1"/"true" for remote, "0"/"false" for local
  *   PLANNOTATOR_PORT   - Fixed port to use (default: random locally, 19432 for remote)
  *   PLANNOTATOR_ORIGIN - Origin identifier ("claude-code" or "opencode")
  */
@@ -284,10 +284,12 @@ export async function startPlannotatorServer(
           // API: Update user config (write-back to ~/.plannotator/config.json)
           if (url.pathname === "/api/config" && req.method === "POST") {
             try {
-              const body = (await req.json()) as { displayName?: string; diffOptions?: Record<string, unknown> };
+              const body = (await req.json()) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean; conventionalLabels?: unknown[] | null };
               const toSave: Record<string, unknown> = {};
               if (body.displayName !== undefined) toSave.displayName = body.displayName;
               if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
+              if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
+              if (body.conventionalLabels !== undefined) toSave.conventionalLabels = body.conventionalLabels;
               if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
               return Response.json({ ok: true });
             } catch {
@@ -532,6 +534,14 @@ export async function startPlannotatorServer(
           return new Response(htmlContent, {
             headers: { "Content-Type": "text/html" },
           });
+        },
+
+        error(err) {
+          console.error("[plannotator] Server error:", err);
+          return new Response(
+            `Internal Server Error: ${err instanceof Error ? err.message : String(err)}`,
+            { status: 500, headers: { "Content-Type": "text/plain" } },
+          );
         },
       });
 

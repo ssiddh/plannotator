@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ToolbarState } from '../hooks/useAnnotationToolbar';
 import { useTabIndent } from '../hooks/useTabIndent';
-import { formatLineRange } from '../utils/formatLineRange';
+import { formatLineRange, formatTokenContext } from '../utils/formatLineRange';
 import { AskAIInput } from './AskAIInput';
 import { SparklesIcon } from './SparklesIcon';
+import { ConventionalLabelPicker, type LabelDef } from './ConventionalLabelPicker';
+import type { ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
 import type { AIChatEntry } from '../hooks/useAIChat';
 import { useDraggable } from '@plannotator/ui/hooks/useDraggable';
 
@@ -16,11 +19,19 @@ interface AnnotationToolbarProps {
   setSuggestedCode: React.Dispatch<React.SetStateAction<string>>;
   showSuggestedCode: boolean;
   setShowSuggestedCode: (show: boolean) => void;
+  selectedOriginalCode?: string;
   isEditing?: boolean;
   setShowCodeModal: (show: boolean) => void;
   onSubmit: () => void;
   onDismiss: () => void;
   onCancel: () => void;
+  // Conventional Comments
+  conventionalCommentsEnabled: boolean;
+  conventionalLabel: ConventionalLabel | null;
+  onConventionalLabelChange: (label: ConventionalLabel | null) => void;
+  decorations: ConventionalDecoration[];
+  onDecorationsChange: (decorations: ConventionalDecoration[]) => void;
+  enabledLabels?: LabelDef[];
   // AI props
   aiAvailable?: boolean;
   onAskAI?: (question: string) => void;
@@ -40,17 +51,25 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   setSuggestedCode,
   showSuggestedCode,
   setShowSuggestedCode,
+  selectedOriginalCode,
   isEditing = false,
   setShowCodeModal,
   onSubmit,
   onDismiss,
   onCancel,
+  conventionalCommentsEnabled,
+  conventionalLabel,
+  onConventionalLabelChange,
+  decorations,
+  onDecorationsChange,
+  enabledLabels,
   aiAvailable = false,
   onAskAI,
   isAILoading = false,
   onViewAIResponse,
   aiHistoryMessages = [],
 }) => {
+  const suggestedCodeRef = useRef<HTMLTextAreaElement>(null);
   const handleTabIndent = useTabIndent(setSuggestedCode);
   const [askAIMode, setAskAIMode] = useState(false);
   const { dragPosition, dragHandleProps, wasDragged, reset: resetDrag } = useDraggable(toolbarRef);
@@ -81,7 +100,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     onCancel(); // close the whole toolbar
   };
 
-  return (
+  const content = (
     <div
       ref={toolbarRef}
       className="review-toolbar"
@@ -112,7 +131,11 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
         <div className="w-80">
           <div className="flex items-center justify-between mb-2" {...dragHandleProps}>
             <span className="text-xs text-muted-foreground">
-              {isEditing ? 'Edit annotation' : formatLineRange(toolbarState.range.start, toolbarState.range.end)}
+              {isEditing
+                ? 'Edit annotation'
+                : toolbarState.tokenSelection
+                  ? formatTokenContext(toolbarState.tokenSelection)
+                  : formatLineRange(toolbarState.range.start, toolbarState.range.end)}
             </span>
             <button
               onClick={onCancel}
@@ -124,6 +147,16 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
               </svg>
             </button>
           </div>
+
+          {conventionalCommentsEnabled && (
+            <ConventionalLabelPicker
+              selected={conventionalLabel}
+              decorations={decorations}
+              onSelect={onConventionalLabelChange}
+              onDecorationsChange={onDecorationsChange}
+              enabledLabels={enabledLabels}
+            />
+          )}
 
           <textarea
             value={commentText}
@@ -157,6 +190,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
                 </button>
               </div>
               <textarea
+                ref={suggestedCodeRef}
                 value={suggestedCode}
                 onChange={(e) => setSuggestedCode(e.target.value)}
                 placeholder="Enter code suggestion..."
@@ -175,7 +209,22 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
             </div>
           ) : (
             <button
-              onClick={() => setShowSuggestedCode(true)}
+              onClick={() => {
+                setShowSuggestedCode(true);
+
+                const prefill = !suggestedCode && selectedOriginalCode;
+                if (prefill) {
+                  setSuggestedCode(selectedOriginalCode);
+
+                  // Focus at the end of the textarea
+                  requestAnimationFrame(() => {
+                    const ta = suggestedCodeRef.current;
+                    if (ta) {
+                      ta.setSelectionRange(ta.value.length, ta.value.length);
+                    }
+                  });
+                }
+              }}
               className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -216,4 +265,10 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       )}
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 };

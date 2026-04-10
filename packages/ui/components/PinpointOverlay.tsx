@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useState, useRef } from 'react';
+import { useScrollViewport } from '../hooks/useScrollViewport';
 
 interface PinpointOverlayProps {
   target: { element: HTMLElement; label: string } | null;
@@ -15,6 +16,7 @@ interface OverlayPosition {
 export const PinpointOverlay: React.FC<PinpointOverlayProps> = ({ target, containerRef }) => {
   const [position, setPosition] = useState<OverlayPosition | null>(null);
   const rafRef = useRef<number>(0);
+  const scrollViewport = useScrollViewport();
 
   useLayoutEffect(() => {
     if (!target || !containerRef.current) {
@@ -41,16 +43,23 @@ export const PinpointOverlay: React.FC<PinpointOverlayProps> = ({ target, contai
       rafRef.current = requestAnimationFrame(updatePosition);
     };
 
-    const scrollContainer = document.querySelector('main') || window;
-    scrollContainer.addEventListener('scroll', handleUpdate, { passive: true });
+    // Window resize always matters, regardless of whether the scroll
+    // viewport is ready yet. Register it unconditionally so the overlay
+    // stays aligned during the brief window before OverlayScrollbars
+    // delivers its viewport.
     window.addEventListener('resize', handleUpdate, { passive: true });
+
+    // The scroll element is the OverlayScrollArea viewport. Falling back to
+    // <main> or window would attach to the wrong node and the overlay
+    // position would drift silently on scroll.
+    scrollViewport?.addEventListener('scroll', handleUpdate, { passive: true });
 
     return () => {
       cancelAnimationFrame(rafRef.current);
-      scrollContainer.removeEventListener('scroll', handleUpdate);
       window.removeEventListener('resize', handleUpdate);
+      scrollViewport?.removeEventListener('scroll', handleUpdate);
     };
-  }, [target, containerRef]);
+  }, [target, containerRef, scrollViewport]);
 
   if (!position || !target) return null;
 

@@ -1,6 +1,20 @@
-import type { CodeAnnotation } from '@plannotator/ui/types';
+import type { CodeAnnotation, ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
 import type { PRMetadata } from '@plannotator/shared/pr-provider';
 import { getMRLabel, getMRNumberLabel, getDisplayRepo } from '@plannotator/shared/pr-provider';
+
+/**
+ * Format a conventional comment prefix per the Conventional Comments spec:
+ * `**label (decorations):** ` — entire label+decorations+colon wrapped in bold.
+ * See https://conventionalcomments.org for examples.
+ */
+export function formatConventionalPrefix(
+  label?: ConventionalLabel,
+  decorations?: ConventionalDecoration[],
+): string {
+  if (!label) return '';
+  const decs = decorations?.length ? ` (${decorations.join(', ')})` : '';
+  return `**${label}${decs}:** `;
+}
 
 /**
  * Build markdown feedback from code review annotations.
@@ -46,11 +60,15 @@ export function exportReviewFeedback(
       const ann = sorted[i];
       const scope = ann.scope ?? 'line';
 
+      const prefix = formatConventionalPrefix(ann.conventionalLabel, ann.decorations);
+
       if (scope === 'file') {
         output += `### File Comment\n`;
 
         if (ann.text) {
-          output += `${ann.text}\n`;
+          output += `${prefix}${ann.text}\n`;
+        } else if (prefix) {
+          output += `${prefix.trimEnd()}\n`;
         }
 
         if (ann.suggestedCode) {
@@ -65,10 +83,19 @@ export function exportReviewFeedback(
         ? `Line ${ann.lineStart}`
         : `Lines ${ann.lineStart}-${ann.lineEnd}`;
 
-      output += `### ${lineRange} (${ann.side})\n`;
+      const tokenSuffix = ann.tokenText
+        ? ` — \`\`${ann.tokenText.replace(/`/g, '\\`')}\`\`${ann.charStart != null ? ` (chars ${ann.charStart}-${ann.charEnd})` : ''}`
+        : '';
+      output += `### ${lineRange} (${ann.side})${tokenSuffix}\n`;
 
       if (ann.text) {
-        output += `${ann.text}\n`;
+        output += `${prefix}${ann.text}\n`;
+      } else if (prefix) {
+        output += `${prefix.trimEnd()}\n`;
+      }
+
+      if (ann.reasoning) {
+        output += `\n**Reasoning:** ${ann.reasoning}\n`;
       }
 
       if (ann.suggestedCode) {

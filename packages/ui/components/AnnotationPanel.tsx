@@ -9,6 +9,7 @@ import { useThreadNav } from '../hooks/useThreadNav';
 import { SummaryModal } from './SummaryModal';
 import { ThreadPickerModal } from './ThreadPickerModal';
 import { exportSummariesAsMarkdown, downloadSummariesMarkdown } from '../utils/summaryExport';
+import { OverlayScrollArea } from './OverlayScrollArea';
 
 interface PanelProps {
   isOpen: boolean;
@@ -18,13 +19,13 @@ interface PanelProps {
   onDelete: (id: string) => void;
   onEdit?: (id: string, updates: Partial<Annotation>) => void;
   selectedId: string | null;
-  shareUrl?: string;
   sharingEnabled?: boolean;
   width?: number;
   editorAnnotations?: EditorAnnotation[];
   onDeleteEditorAnnotation?: (id: string) => void;
   onClose?: () => void;
   onQuickCopy?: () => Promise<void>;
+  onShare?: () => void;
   otherFileAnnotations?: { count: number; files: number };
   onOtherFileAnnotationsClick?: () => void;
   onAddAnnotation?: (annotation: Annotation) => void;
@@ -39,20 +40,19 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   onDelete,
   onEdit,
   selectedId,
-  shareUrl,
   sharingEnabled = true,
   width,
   editorAnnotations,
   onDeleteEditorAnnotation,
   onClose,
   onQuickCopy,
+  onShare,
   otherFileAnnotations,
   onOtherFileAnnotationsClick,
   onAddAnnotation,
   prMetadata,
 }) => {
   const isMobile = useIsMobile();
-  const [copied, setCopied] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [showResolved, setShowResolved] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
@@ -75,17 +75,6 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedId]);
-
-  const handleQuickShare = async () => {
-    if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error('Failed to copy:', e);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -182,7 +171,8 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
       </div>
 
       {/* List */}
-      <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1.5">
+      <OverlayScrollArea className="flex-1 min-h-0">
+        <div ref={listRef} className="p-2 space-y-1.5">
         {totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-center px-4">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -233,7 +223,8 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
 
           </>
         )}
-      </div>
+        </div>
+      </OverlayScrollArea>
 
       {/* Quick Actions Footer */}
       {totalCount > 0 && (
@@ -259,31 +250,20 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  Quick Copy
+                  Copy
                 </>
               )}
             </button>
           )}
-          {sharingEnabled && shareUrl && (
+          {sharingEnabled && onShare && (
             <button
-              onClick={handleQuickShare}
+              onClick={onShare}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
-              {copied ? (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Copied
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                  Quick Share
-                </>
-              )}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Share
             </button>
           )}
         </div>

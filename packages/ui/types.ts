@@ -8,6 +8,16 @@ export type EditorMode = 'selection' | 'comment' | 'redline' | 'quickLabel';
 
 export type InputMethod = 'drag' | 'pinpoint';
 
+/**
+ * Compactness of the Viewer action button labels (Image / Comment / Copy).
+ * Driven by measured plan-area width so the cluster collapses responsively
+ * when the side panel squeezes the plan.
+ *   full  → "Global comment" / "Copy plan"
+ *   short → "Comment" / "Copy"
+ *   icon  → labels hidden entirely
+ */
+export type ActionsLabelMode = 'full' | 'short' | 'icon';
+
 export interface ImageAttachment {
   path: string;
   name: string;
@@ -53,6 +63,8 @@ export interface Block {
   level?: number; // For headings (1-6) or list indentation
   language?: string; // For code blocks (e.g., 'rust', 'typescript')
   checked?: boolean; // For checkbox list items (true = checked, false = unchecked, undefined = not a checkbox)
+  ordered?: boolean; // For list items: true when source marker was \d+.
+  orderedStart?: number; // For ordered list items: integer parsed from the marker (e.g. 5 for "5.")
   order: number; // Sorting order
   startLine: number; // 1-based line number in source
 }
@@ -67,6 +79,24 @@ export interface DiffResult {
 export type CodeAnnotationType = 'comment' | 'suggestion' | 'concern';
 export type CodeAnnotationScope = 'line' | 'file';
 
+/** Conventional Comments label — see https://conventionalcomments.org */
+export type ConventionalLabel =
+  | 'praise'
+  | 'nitpick'
+  | 'suggestion'
+  | 'issue'
+  | 'todo'
+  | 'question'
+  | 'thought'
+  | 'chore'
+  | 'note'
+  | 'typo'
+  | 'polish'
+  | (string & {}); // Allow custom labels while preserving autocomplete for built-ins
+
+/** Conventional Comments decoration (parenthesized modifier) */
+export type ConventionalDecoration = 'blocking' | 'non-blocking' | 'if-minor';
+
 export interface CodeAnnotation {
   id: string;
   type: CodeAnnotationType;
@@ -78,10 +108,31 @@ export interface CodeAnnotation {
   text?: string;
   suggestedCode?: string;
   originalCode?: string; // Original selected lines for suggestion diff
+  charStart?: number; // Character offset within lineStart (token-level selection)
+  charEnd?: number; // Character offset within lineEnd (token-level selection)
+  tokenText?: string; // Selected token/span text (token-level selection)
   createdAt: number;
   author?: string;
   source?: string; // External tool identifier (e.g., "eslint") — set when annotation comes from external API
+  severity?: 'important' | 'nit' | 'pre_existing'; // Agent review severity (Claude)
+  reasoning?: string; // Validation chain — how the issue was confirmed (Claude)
+  conventionalLabel?: ConventionalLabel;
+  decorations?: ConventionalDecoration[];
 }
+
+/** Token-level metadata passed from selection to annotation creation. */
+export interface TokenAnnotationMeta {
+  charStart: number;
+  charEnd: number;
+  tokenText: string;
+}
+
+/** Severity display styles — shared between agent detail panel and inline diff annotations. */
+export const SEVERITY_STYLES: Record<string, { dot: string; label: string }> = {
+  important: { dot: 'bg-destructive', label: 'Important' },
+  nit: { dot: 'bg-amber-500', label: 'Nit' },
+  pre_existing: { dot: 'bg-muted-foreground', label: 'Pre-existing' },
+};
 
 // For @pierre/diffs integration
 export interface DiffAnnotationMetadata {
@@ -91,6 +142,10 @@ export interface DiffAnnotationMetadata {
   suggestedCode?: string;
   originalCode?: string;
   author?: string;
+  severity?: 'important' | 'nit' | 'pre_existing';
+  reasoning?: string;
+  conventionalLabel?: ConventionalLabel;
+  decorations?: ConventionalDecoration[];
   // AI marker fields (set when kind === 'ai-marker')
   kind?: 'annotation' | 'ai-marker';
   questionId?: string;

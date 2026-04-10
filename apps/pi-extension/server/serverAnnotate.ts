@@ -15,14 +15,20 @@ import { html, json, parseBody, requestUrl } from "./helpers.js";
 import { listenOnPort } from "./network.js";
 
 import { getRepoInfo } from "./project.js";
-import { handleDocRequest, handleFileBrowserRequest } from "./reference.js";
+import {
+	handleDocRequest,
+	handleFileBrowserRequest,
+	handleObsidianVaultsRequest,
+	handleObsidianFilesRequest,
+	handleObsidianDocRequest,
+} from "./reference.js";
 import { createExternalAnnotationHandler } from "./external-annotations.js";
 
 export interface AnnotateServerResult {
 	port: number;
 	portSource: "env" | "remote-default" | "random";
 	url: string;
-	waitForDecision: () => Promise<{ feedback: string; annotations: unknown[] }>;
+	waitForDecision: () => Promise<{ feedback: string; annotations: unknown[]; exit?: boolean }>;
 	stop: () => void;
 }
 
@@ -48,10 +54,12 @@ export async function startAnnotateServer(options: {
 	let resolveDecision!: (result: {
 		feedback: string;
 		annotations: unknown[];
+		exit?: boolean;
 	}) => void;
 	const decisionPromise = new Promise<{
 		feedback: string;
 		annotations: unknown[];
+		exit?: boolean;
 	}>((r) => {
 		resolveDecision = r;
 	});
@@ -84,10 +92,11 @@ export async function startAnnotateServer(options: {
 			});
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown> };
+				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
 				const toSave: Record<string, unknown> = {};
 				if (body.displayName !== undefined) toSave.displayName = body.displayName;
 				if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
+				if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
 				if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
 				json(res, { ok: true });
 			} catch {
@@ -105,10 +114,20 @@ export async function startAnnotateServer(options: {
 				url.searchParams.set("base", dirname(resolvePath(options.filePath)));
 			}
 			handleDocRequest(res, url);
+		} else if (url.pathname === "/api/obsidian/vaults") {
+			handleObsidianVaultsRequest(res);
+		} else if (url.pathname === "/api/reference/obsidian/files" && req.method === "GET") {
+			handleObsidianFilesRequest(res, url);
+		} else if (url.pathname === "/api/reference/obsidian/doc" && req.method === "GET") {
+			handleObsidianDocRequest(res, url);
 		} else if (url.pathname === "/api/reference/files" && req.method === "GET") {
 			handleFileBrowserRequest(res, url);
 		} else if (url.pathname === "/favicon.svg") {
 			handleFavicon(res);
+		} else if (url.pathname === "/api/exit" && req.method === "POST") {
+			deleteDraft(draftKey);
+			resolveDecision({ feedback: "", annotations: [], exit: true });
+			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
 				const body = await parseBody(req);

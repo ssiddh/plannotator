@@ -37,6 +37,13 @@
   color: var(--foreground);
 }
 
+@media (min-width: 768px) {
+  .prose {
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+}
+
 .prose h1 {
   font-size: 1.5rem;
   font-weight: 700;

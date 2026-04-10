@@ -78,6 +78,7 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   let currentType: Block['type'] = 'paragraph';
   let currentLevel = 0;
   let bufferStartLine = 1; // Track the start line of the current buffer
+  let lastLineWasBlank = false;
 
   const flush = () => {
     if (buffer.length > 0) {
@@ -98,6 +99,8 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     const line = lines[i];
     const trimmed = line.trim();
     const currentLineNum = i + 1; // 1-based index
+    const prevLineWasBlank = lastLineWasBlank;
+    lastLineWasBlank = false;
 
     // Headings
     if (trimmed.startsWith('#')) {
@@ -128,7 +131,8 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     }
 
     // List Items (Simple detection)
-    if (trimmed.match(/^(\*|-|\d+\.)\s/)) {
+    const listMatch = trimmed.match(/^(\*|-|(\d+)\.)\s/);
+    if (listMatch) {
       flush(); // Treat each list item as a separate block for easier annotation
       // Calculate indentation level from leading whitespace
       const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
@@ -136,8 +140,12 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       const spaceCount = leadingWhitespace.replace(/\t/g, '  ').length;
       const listLevel = Math.floor(spaceCount / 2);
 
+      // Distinguish numeric markers (\d+.) from bullet markers (* / -)
+      const ordered = listMatch[2] !== undefined;
+      const orderedStart = ordered ? parseInt(listMatch[2]!, 10) : undefined;
+
       // Remove list marker
-      let content = trimmed.replace(/^(\*|-|\d+\.)\s/, '');
+      let content = trimmed.slice(listMatch[0].length);
 
       // Check for checkbox syntax: [ ] or [x] or [X]
       let checked: boolean | undefined = undefined;
@@ -153,24 +161,57 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
         content,
         level: listLevel,
         checked,
+        ordered: ordered || undefined,
+        orderedStart,
         order: currentId,
         startLine: currentLineNum
       });
       continue;
     }
 
-    // Blockquotes
+    // Blockquotes — consecutive `>` lines merge into one block so wrapped
+    // paragraph quotes render as a single continuous quote box. A blank line
+    // breaks the blockquote so the next `>` starts a fresh one.
+    //
+    // Exception: if the stripped content starts with a block-level marker
+    // (list item, heading, code fence, nested blockquote) we do NOT merge.
+    // Our flat block model can't render a list-inside-a-quote as an actual
+    // nested list, so merging would flatten the markers into run-on inline
+    // text. Leaving them as separate blockquote blocks preserves each line's
+    // visual identity (a stacked-box layout) — imperfect but legible. A
+    // proper recursive blockquote parser is tracked as a follow-up.
     if (trimmed.startsWith('>')) {
-       // Check if previous was blockquote, if so, merge? No, separate for now
-       flush();
-       blocks.push({
-         id: `block-${currentId++}`,
-         type: 'blockquote',
-         content: trimmed.replace(/^>\s*/, ''),
-         order: currentId,
-         startLine: currentLineNum
-       });
-       continue;
+      flush();
+      const stripped = trimmed.replace(/^>\s*/, '');
+      // List markers require trailing whitespace to avoid matching inline
+      // text like "-hyphen" or "1.5 seconds"; headings, code fences, and
+      // nested blockquote markers don't require it (``` can be followed
+      // directly by a language tag, # can start a dense heading).
+      const blockMarkerRe = /^(?:(?:\*|-|\d+\.)\s|#|```|>)/;
+      const hasBlockMarker = blockMarkerRe.test(stripped);
+      const prevBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+      // Don't merge into a previous blockquote whose content itself starts
+      // with a block marker — otherwise a `> some text` line following a
+      // `> 1. item` line would get glued onto the list-item block.
+      const prevIsMarkerQuote =
+        prevBlock?.type === 'blockquote' && blockMarkerRe.test(prevBlock.content);
+      if (
+        !hasBlockMarker &&
+        !prevIsMarkerQuote &&
+        !prevLineWasBlank &&
+        prevBlock?.type === 'blockquote'
+      ) {
+        prevBlock.content += '\n' + stripped;
+      } else {
+        blocks.push({
+          id: `block-${currentId++}`,
+          type: 'blockquote',
+          content: stripped,
+          order: currentId,
+          startLine: currentLineNum
+        });
+      }
+      continue;
     }
     
     // Code blocks (naive)
@@ -232,6 +273,18 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     if (trimmed === '') {
       flush();
       currentType = 'paragraph';
+      lastLineWasBlank = true;
+      continue;
+    }
+    // List continuation: indented line after a list item merges into it
+    if (
+      !prevLineWasBlank &&
+      buffer.length === 0 &&
+      blocks.length > 0 &&
+      blocks[blocks.length - 1].type === 'list-item' &&
+      /^\s+/.test(line)
+    ) {
+      blocks[blocks.length - 1].content += '\n' + trimmed;
       continue;
     }
 
@@ -245,6 +298,49 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   flush(); // Final flush
 
   return blocks;
+};
+
+/**
+ * Compute the display index for each list item in a contiguous list group.
+ *
+ * Returns a parallel array where each entry is either:
+ *   - a positive integer (the numeral to render for an ordered item), or
+ *   - null (the item is unordered, render a bullet symbol).
+ *
+ * Semantics:
+ *   - A run of consecutive ordered items at the same level increments
+ *     sequentially. The first item in a run uses its `orderedStart` (the
+ *     number from the source markdown); subsequent items renumber from there
+ *     so `1. / 2. / 5.` renders as 1, 2, 3 (matches CommonMark).
+ *   - An unordered item at level L breaks the ordered streak at L. The next
+ *     ordered item at L restarts from its own `orderedStart`.
+ *   - Visiting a level shallower than the current one truncates deeper-level
+ *     state, so re-entering that depth later starts fresh. Top-level numbering
+ *     continues across nested children of any kind.
+ */
+export const computeListIndices = (blocks: Block[]): (number | null)[] => {
+  const counters: number[] = [];
+  const lastOrderedAtLevel: boolean[] = [];
+
+  return blocks.map(block => {
+    const lvl = block.level || 0;
+    // Sibling change at any deeper level resets those levels.
+    counters.length = lvl + 1;
+    lastOrderedAtLevel.length = lvl + 1;
+
+    if (!block.ordered) {
+      lastOrderedAtLevel[lvl] = false;
+      return null;
+    }
+
+    if (lastOrderedAtLevel[lvl]) {
+      counters[lvl] = (counters[lvl] ?? 0) + 1;
+    } else {
+      counters[lvl] = block.orderedStart ?? 1;
+    }
+    lastOrderedAtLevel[lvl] = true;
+    return counters[lvl];
+  });
 };
 
 /** Wrap feedback output with the deny preamble for pasting into agent sessions */

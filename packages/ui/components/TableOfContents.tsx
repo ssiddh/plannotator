@@ -6,6 +6,7 @@ import {
   type TocItem,
 } from '../utils/annotationHelpers';
 import { CountBadge } from './sidebar/CountBadge';
+import { useScrollViewport } from '../hooks/useScrollViewport';
 
 interface TableOfContentsProps {
   blocks: Block[];
@@ -159,18 +160,22 @@ export function TableOfContents({
     [blocks, annotationCounts]
   );
 
+  // The real scroll element is the OverlayScrollArea viewport, not <main>.
+  const scrollViewport = useScrollViewport();
+
   // Handle navigation with smooth scroll
   const handleNavigate = useCallback(
     (blockId: string) => {
       onNavigate(blockId);
-      
-      // Find target element and scroll to it
+
+      // Find target element and scroll to it. scrollViewport is the
+      // OverlayScrollArea's internal viewport — querying for <main> would
+      // return the OverlayScrollArea host (not the scrolling element) and
+      // silently produce wrong offsets.
       const target = document.querySelector(`[data-block-id="${blockId}"]`);
-      if (target) {
-        // Find the scrollable main container
-        const scrollContainer = document.querySelector('main');
-        if (!scrollContainer) return;
-        
+      if (target && scrollViewport) {
+        const scrollContainer = scrollViewport;
+
         // Account for sticky header (48px = h-12)
         const headerOffset = 80;
         const containerRect = scrollContainer.getBoundingClientRect();
@@ -185,7 +190,7 @@ export function TableOfContents({
         });
       }
     },
-    [onNavigate]
+    [onNavigate, scrollViewport]
   );
 
   if (tocItems.length === 0) {
@@ -194,7 +199,10 @@ export function TableOfContents({
 
   return (
     <nav
-      className={className || "bg-card/50 backdrop-blur-sm border-r border-border overflow-y-auto"}
+      // Use ?? not || — an explicit empty string from a caller means "I'm
+      // managing my own container styling" (e.g. SidebarContainer wrapping
+      // us in an OverlayScrollArea), which should NOT trigger the default.
+      className={className ?? "bg-card/50 backdrop-blur-sm border-r border-border overflow-y-auto"}
       aria-label="Table of contents"
       style={style}
     >

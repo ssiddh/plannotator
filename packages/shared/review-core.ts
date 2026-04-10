@@ -13,7 +13,10 @@ export type DiffType =
   | "unstaged"
   | "last-commit"
   | "branch"
-  | `worktree:${string}`;
+  | "merge-base"
+  | `worktree:${string}`
+  | "p4-default"
+  | `p4-changelist:${string}`;
 
 export interface DiffOption {
   id: string;
@@ -32,6 +35,7 @@ export interface GitContext {
   diffOptions: DiffOption[];
   worktrees: WorktreeInfo[];
   cwd?: string;
+  vcsType?: "git" | "p4";
 }
 
 export interface DiffResult {
@@ -147,6 +151,7 @@ export async function getGitContext(
 
   if (currentBranch !== defaultBranch) {
     diffOptions.push({ id: "branch", label: `vs ${defaultBranch}` });
+    diffOptions.push({ id: "merge-base", label: `Current PR Diff` });
   }
 
   const [worktrees, currentTreePathResult] = await Promise.all([
@@ -382,6 +387,28 @@ export async function runGitDiff(
         break;
       }
 
+      case "merge-base": {
+        const mergeBaseResult = assertGitSuccess(
+          await runtime.runGit(["merge-base", defaultBranch, "HEAD"], { cwd }),
+          ["merge-base", defaultBranch, "HEAD"],
+        );
+        const mergeBase = mergeBaseResult.stdout.trim();
+        const mergeBaseDiffArgs = [
+          "diff",
+          "--no-ext-diff",
+          `${mergeBase}..HEAD`,
+          "--src-prefix=a/",
+          "--dst-prefix=b/",
+        ];
+        const mergeBaseDiff = assertGitSuccess(
+          await runtime.runGit(mergeBaseDiffArgs, { cwd }),
+          mergeBaseDiffArgs,
+        );
+        patch = mergeBaseDiff.stdout;
+        label = `PR diff vs ${defaultBranch}`;
+        break;
+      }
+
       default:
         return { patch: "", label: "Unknown diff type" };
     }
@@ -471,6 +498,14 @@ export async function getFileContentsForDiff(
         oldContent: await gitShow(defaultBranch, oldFilePath),
         newContent: await gitShow("HEAD", filePath),
       };
+    case "merge-base": {
+      const mbResult = await runtime.runGit(["merge-base", defaultBranch, "HEAD"], { cwd });
+      const mb = mbResult.exitCode === 0 ? mbResult.stdout.trim() : defaultBranch;
+      return {
+        oldContent: await gitShow(mb, oldFilePath),
+        newContent: await gitShow("HEAD", filePath),
+      };
+    }
     default:
       return { oldContent: null, newContent: null };
   }
@@ -509,4 +544,18 @@ export async function gitResetFile(
 ): Promise<void> {
   validateFilePath(filePath);
   await ensureGitSuccess(runtime, ["reset", "HEAD", "--", filePath], cwd);
+}
+
+export function parseP4DiffType(
+  diffType: string,
+): { changelist: string | "default" } | null {
+  if (diffType === "p4-default") return { changelist: "default" };
+  if (diffType.startsWith("p4-changelist:")) {
+    return { changelist: diffType.slice("p4-changelist:".length) };
+  }
+  return null;
+}
+
+export function isP4DiffType(diffType: string): boolean {
+  return parseP4DiffType(diffType) !== null;
 }

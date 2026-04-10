@@ -2,8 +2,9 @@ import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle, us
 import { createPortal } from 'react-dom';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
-import { Block, Annotation, AnnotationType, EditorMode, type InputMethod, type ImageAttachment } from '../types';
-import { Frontmatter } from '../utils/parser';
+import { Block, Annotation, AnnotationType, EditorMode, type InputMethod, type ImageAttachment, type ActionsLabelMode } from '../types';
+import { Frontmatter, computeListIndices } from '../utils/parser';
+import { ListMarker } from './ListMarker';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import { FloatingQuickLabelPicker } from './FloatingQuickLabelPicker';
 
@@ -33,10 +34,11 @@ import { getImageSrc } from './ImageThumbnail';
 import { isGraphvizLanguage, isMermaidLanguage } from './diagramLanguages';
 import { getIdentity } from '../utils/identity';
 import { type QuickLabel } from '../utils/quickLabels';
-import { PlanDiffBadge } from './plan-diff/PlanDiffBadge';
+import { DocBadges } from './DocBadges';
 import { PinpointOverlay } from './PinpointOverlay';
 import { usePinpoint } from '../hooks/usePinpoint';
 import { useAnnotationHighlighter } from '../hooks/useAnnotationHighlighter';
+import { useScrollViewport } from '../hooks/useScrollViewport';
 
 interface ViewerProps {
   blocks: Block[];
@@ -68,6 +70,12 @@ interface ViewerProps {
   maxWidth?: number;
   /** Label for the copy button (default: "Copy plan") */
   copyLabel?: string;
+  /**
+   * Compactness of the action button labels. See ActionsLabelMode in
+   * types.ts. Defaults to 'full' to preserve the original look for
+   * callers that don't measure plan-area width.
+   */
+  actionsLabelMode?: ActionsLabelMode;
   archiveInfo?: { status: 'approved' | 'denied' | 'unknown'; timestamp: string; title: string } | null;
   // Checkbox toggle props
   onToggleCheckbox?: (blockId: string, checked: boolean) => void;
@@ -139,6 +147,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   linkedDocInfo,
   imageBaseDir,
   copyLabel,
+  actionsLabelMode = 'full',
   archiveInfo,
   onToggleCheckbox,
   checkboxOverrides,
@@ -254,17 +263,19 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
     return () => container.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
-  // Detect when sticky action bar is "stuck" to show card background
+  // Detect when sticky action bar is "stuck" to show card background.
+  // The IntersectionObserver root must be the actual scroll element — the
+  // OverlayScrollArea viewport — not the <main> host, which doesn't scroll.
+  const stickyScrollViewport = useScrollViewport();
   useEffect(() => {
-    if (!stickyActions || !stickySentinelRef.current) return;
-    const scrollContainer = document.querySelector('main');
+    if (!stickyActions || !stickySentinelRef.current || !stickyScrollViewport) return;
     const observer = new IntersectionObserver(
       ([entry]) => setIsStuck(!entry.isIntersecting),
-      { root: scrollContainer, threshold: 0 }
+      { root: stickyScrollViewport, threshold: 0 }
     );
     observer.observe(stickySentinelRef.current);
     return () => observer.disconnect();
-  }, [stickyActions]);
+  }, [stickyActions, stickyScrollViewport]);
 
   // Cmd+C / Ctrl+C keyboard shortcut for copying selected text
   useEffect(() => {
@@ -434,84 +445,23 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       <article
         ref={containerRef}
         data-print-region="article"
-        className={`w-full bg-card rounded-xl shadow-xl p-5 md:p-8 lg:p-10 xl:p-12 relative ${
-          linkedDocInfo ? 'border border-primary/40' : 'border border-border/50'
-        } ${inputMethod === 'pinpoint' ? 'cursor-crosshair' : ''}`}
+        className={`w-full bg-card rounded-xl shadow-xl p-5 md:p-8 lg:p-10 xl:p-12 relative border border-border/50 ${inputMethod === 'pinpoint' ? 'cursor-crosshair' : ''}`}
         style={{ WebkitTouchCallout: 'none' } as React.CSSProperties}
       >
         {/* Repo info + plan diff badge + demo badge + linked doc badge + archive badge - top left */}
         {(repoInfo || hasPreviousVersion || showDemoBadge || linkedDocInfo || archiveInfo) && (
-          <div data-print-hide className="absolute top-3 left-3 md:top-4 md:left-5 flex flex-col items-start gap-1 text-[9px] text-muted-foreground/50 font-mono">
-            {repoInfo && !linkedDocInfo && (
-              <div className="flex items-center gap-1.5">
-                <span className="px-1.5 py-0.5 bg-muted/50 rounded truncate max-w-[140px]" title={repoInfo.display}>
-                  {repoInfo.display}
-                </span>
-                {repoInfo.branch && (
-                  <span className="px-1.5 py-0.5 bg-muted/30 rounded max-w-[120px] flex items-center gap-1 overflow-hidden" title={repoInfo.branch}>
-                    <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
-                    </svg>
-                    <span className="truncate">{repoInfo.branch}</span>
-                  </span>
-                )}
-              </div>
-            )}
-            {onPlanDiffToggle && !linkedDocInfo && (
-              <PlanDiffBadge
-                stats={planDiffStats ?? null}
-                isActive={isPlanDiffActive ?? false}
-                onToggle={onPlanDiffToggle}
-                hasPreviousVersion={hasPreviousVersion ?? false}
-              />
-            )}
-            {showDemoBadge && !linkedDocInfo && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                Demo
-              </span>
-            )}
-            {archiveInfo && !linkedDocInfo && (
-              <div className="flex items-center gap-1.5">
-                <span className={`px-1.5 py-0.5 rounded ${
-                  archiveInfo.status === 'approved'
-                    ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                    : archiveInfo.status === 'denied'
-                      ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                      : 'bg-muted/50 text-muted-foreground'
-                }`}>
-                  {archiveInfo.status === 'approved' ? 'Approved' : archiveInfo.status === 'denied' ? 'Denied' : 'Unknown'}
-                </span>
-                {archiveInfo.timestamp && (
-                  <span className="px-1.5 py-0.5 bg-muted/50 rounded" title={archiveInfo.timestamp}>
-                    {new Date(archiveInfo.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    {' '}
-                    {new Date(archiveInfo.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-                  </span>
-                )}
-              </div>
-            )}
-            {linkedDocInfo && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={linkedDocInfo.onBack}
-                  className="px-1.5 py-0.5 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                  </svg>
-                  {linkedDocInfo.backLabel || 'plan'}
-                </button>
-                <span className="px-1.5 py-0.5 bg-primary/10 text-primary/80 rounded">
-                  {linkedDocInfo.label || 'Linked File'}
-                </span>
-                <span
-                  className="px-1.5 py-0.5 bg-muted/50 text-muted-foreground rounded truncate max-w-[200px]"
-                  title={linkedDocInfo.filepath}
-                >
-                  {linkedDocInfo.filepath.split('/').pop()}
-                </span>
-              </div>
-            )}
+          <div data-print-hide className="absolute top-3 left-3 md:top-4 md:left-5">
+            <DocBadges
+              layout="column"
+              repoInfo={repoInfo}
+              planDiffStats={planDiffStats}
+              isPlanDiffActive={isPlanDiffActive}
+              hasPreviousVersion={hasPreviousVersion}
+              onPlanDiffToggle={onPlanDiffToggle}
+              showDemoBadge={showDemoBadge}
+              archiveInfo={archiveInfo}
+              linkedDocInfo={linkedDocInfo}
+            />
           </div>
         )}
 
@@ -519,7 +469,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
         {stickyActions && <div ref={stickySentinelRef} className="h-0 w-0 float-right" aria-hidden="true" />}
 
         {/* Header buttons - top right */}
-        <div data-print-hide className={`${stickyActions ? 'sticky top-3' : ''} z-30 float-right flex items-start gap-1 md:gap-2 rounded-lg p-1 md:p-2 transition-colors duration-150 ${isStuck ? 'bg-card/95 backdrop-blur-sm shadow-sm' : ''} -mr-3 mt-6 md:-mr-5 md:-mt-5 lg:-mr-7 lg:-mt-7 xl:-mr-9 xl:-mt-9`}>
+        <div data-print-hide data-sticky-actions className={`${stickyActions ? 'sticky top-3' : ''} z-30 float-right flex items-start gap-1 md:gap-2 rounded-lg p-1 md:p-2 transition-colors duration-150 ${isStuck ? 'bg-card/95 backdrop-blur-sm shadow-sm' : ''} -mr-3 mt-6 md:-mr-5 md:-mt-5 lg:-mr-7 lg:-mt-7 xl:-mr-9 xl:-mt-9`}>
           {/* Attachments button */}
           {onAddGlobalAttachment && onRemoveGlobalAttachment && (
             <AttachmentsButton
@@ -527,6 +477,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
               onAdd={onAddGlobalAttachment}
               onRemove={onRemoveGlobalAttachment}
               variant="toolbar"
+              hideLabel={actionsLabelMode === 'icon'}
             />
           )}
 
@@ -546,7 +497,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
             </svg>
-            <span className="md:hidden">Comment</span><span className="hidden md:inline">Global comment</span>
+            {actionsLabelMode === 'full' && <span>Global comment</span>}
+            {actionsLabelMode === 'short' && <span>Comment</span>}
           </button>
 
           {/* Copy plan/file button */}
@@ -567,7 +519,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                <span className="md:hidden">Copy</span><span className="hidden md:inline">{copyLabel || (linkedDocInfo ? 'Copy file' : 'Copy plan')}</span>
+                {actionsLabelMode === 'full' && <span>{copyLabel || (linkedDocInfo ? 'Copy file' : 'Copy plan')}</span>}
+                {actionsLabelMode === 'short' && <span>Copy</span>}
               </>
             )}
           </button>
@@ -576,11 +529,25 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
         {!frontmatter && blocks.length > 0 && blocks[0].type !== 'heading' && <div className="mt-4" />}
         {groupBlocks(blocks).map(group =>
           group.type === 'list-group' ? (
-            <div key={group.key} data-pinpoint-group="list" className="py-1 -mx-2 px-2">
-              {group.blocks.map(block => (
-                <BlockRenderer imageBaseDir={imageBaseDir} onImageClick={(src, alt) => setLightbox({ src, alt })} key={block.id} block={block} onOpenLinkedDoc={onOpenLinkedDoc} onToggleCheckbox={onToggleCheckbox} checkboxOverrides={checkboxOverrides} />
-              ))}
-            </div>
+            (() => {
+              const indices = computeListIndices(group.blocks);
+              return (
+                <div key={group.key} data-pinpoint-group="list" className="py-1 -mx-2 px-2">
+                  {group.blocks.map((block, i) => (
+                    <BlockRenderer
+                      imageBaseDir={imageBaseDir}
+                      onImageClick={(src, alt) => setLightbox({ src, alt })}
+                      key={block.id}
+                      block={block}
+                      orderedIndex={indices[i]}
+                      onOpenLinkedDoc={onOpenLinkedDoc}
+                      onToggleCheckbox={onToggleCheckbox}
+                      checkboxOverrides={checkboxOverrides}
+                    />
+                  ))}
+                </div>
+              );
+            })()
           ) : group.block.type === 'code' && isMermaidLanguage(group.block.language) ? (
             <MermaidBlock key={group.block.id} block={group.block} />
           ) : group.block.type === 'code' && isGraphvizLanguage(group.block.language) ? (
@@ -763,27 +730,85 @@ const ImageLightbox: React.FC<{ src: string; alt: string; onClose: () => void }>
 };
 
 /**
- * Renders inline markdown: **bold**, *italic*, `code`, [links](url)
+ * Renders inline markdown: **bold**, *italic*, _italic_, `code`, [links](url)
  */
 const InlineMarkdown: React.FC<{ text: string; onOpenLinkedDoc?: (path: string) => void; imageBaseDir?: string; onImageClick?: (src: string, alt: string) => void }> = ({ text, onOpenLinkedDoc, imageBaseDir, onImageClick }) => {
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
+  let previousChar = '';
 
   while (remaining.length > 0) {
-    // Bold: **text**
-    let match = remaining.match(/^\*\*(.+?)\*\*/);
+    // Backslash escaping: \* \_ \` \[ \~ etc. — emit literal char, hide backslash
+    let match = remaining.match(/^\\([*_`\[\]~!\\])/);
     if (match) {
-      parts.push(<strong key={key++} className="font-semibold"><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></strong>);
-      remaining = remaining.slice(match[0].length);
+      parts.push(match[1]);
+      remaining = remaining.slice(2);
+      previousChar = match[1];
       continue;
     }
 
-    // Italic: *text*
-    match = remaining.match(/^\*(.+?)\*/);
+    // Autolinks: <https://url> or <email@domain.com>
+    match = remaining.match(/^<(https?:\/\/[^>]+)>/);
+    if (match) {
+      const url = match[1];
+      parts.push(<a key={key++} href={url} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{url}</a>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = '>';
+      continue;
+    }
+    match = remaining.match(/^<([^@>\s]+@[^>\s]+)>/);
+    if (match) {
+      const email = match[1];
+      parts.push(<a key={key++} href={`mailto:${email}`} className="text-primary underline underline-offset-2 hover:text-primary/80">{email}</a>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = '>';
+      continue;
+    }
+
+    // Strikethrough: ~~text~~
+    match = remaining.match(/^~~([\s\S]+?)~~/);
+    if (match) {
+      parts.push(<del key={key++}><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></del>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    // Bold + italic: ***text***
+    match = remaining.match(/^\*\*\*([\s\S]+?)\*\*\*/);
+    if (match) {
+      parts.push(<strong key={key++} className="font-semibold"><em><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></em></strong>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    // Bold: **text** ([\s\S]+? allows matching across hard line breaks)
+    match = remaining.match(/^\*\*([\s\S]+?)\*\*/);
+    if (match) {
+      parts.push(<strong key={key++} className="font-semibold"><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></strong>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    // Italic: *text* or _text_ (avoid intraword underscores)
+    match = remaining.match(/^\*([\s\S]+?)\*/);
     if (match) {
       parts.push(<em key={key++}><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></em>);
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    match = !/\w/.test(previousChar)
+      ? remaining.match(/^_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)/)
+      : null;
+    if (match) {
+      parts.push(<em key={key++}><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={match[1]} onOpenLinkedDoc={onOpenLinkedDoc} /></em>);
+      remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -796,6 +821,7 @@ const InlineMarkdown: React.FC<{ text: string; onOpenLinkedDoc?: (path: string) 
         </code>
       );
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -830,6 +856,7 @@ const InlineMarkdown: React.FC<{ text: string; onOpenLinkedDoc?: (path: string) 
         );
       }
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -850,6 +877,7 @@ const InlineMarkdown: React.FC<{ text: string; onOpenLinkedDoc?: (path: string) 
         />
       );
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
       continue;
     }
 
@@ -905,17 +933,34 @@ const InlineMarkdown: React.FC<{ text: string; onOpenLinkedDoc?: (path: string) 
         );
       }
       remaining = remaining.slice(match[0].length);
+      previousChar = match[0][match[0].length - 1] || previousChar;
+      continue;
+    }
+
+    // Hard line break: two+ trailing spaces + newline, or backslash + newline
+    match = remaining.match(/ {2,}\n|\\\n/);
+    if (match && match.index !== undefined) {
+      const before = remaining.slice(0, match.index);
+      if (before) {
+        parts.push(<InlineMarkdown key={key++} text={before} onOpenLinkedDoc={onOpenLinkedDoc} imageBaseDir={imageBaseDir} onImageClick={onImageClick} />);
+      }
+      parts.push(<br key={key++} />);
+      remaining = remaining.slice(match.index + match[0].length);
+      previousChar = '\n';
       continue;
     }
 
     // Find next special character or consume one regular character
-    const nextSpecial = remaining.slice(1).search(/[\*`\[!]/);
+    const nextSpecial = remaining.slice(1).search(/[\*_`\[!~\\<]/);
     if (nextSpecial === -1) {
       parts.push(remaining);
+      previousChar = remaining[remaining.length - 1] || previousChar;
       break;
     } else {
-      parts.push(remaining.slice(0, nextSpecial + 1));
+      const plainText = remaining.slice(0, nextSpecial + 1);
+      parts.push(plainText);
       remaining = remaining.slice(nextSpecial + 1);
+      previousChar = plainText[plainText.length - 1] || previousChar;
     }
   }
 
@@ -980,7 +1025,8 @@ const BlockRenderer: React.FC<{
   onImageClick?: (src: string, alt: string) => void;
   onToggleCheckbox?: (blockId: string, checked: boolean) => void;
   checkboxOverrides?: Map<string, boolean>;
-}> = ({ block, onOpenLinkedDoc, imageBaseDir, onImageClick, onToggleCheckbox, checkboxOverrides }) => {
+  orderedIndex?: number | null;
+}> = ({ block, onOpenLinkedDoc, imageBaseDir, onImageClick, onToggleCheckbox, checkboxOverrides, orderedIndex }) => {
   switch (block.type) {
     case 'heading':
       const Tag = `h${block.level || 1}` as React.ElementType;
@@ -992,15 +1038,23 @@ const BlockRenderer: React.FC<{
 
       return <Tag className={styles} data-block-id={block.id} data-block-type="heading"><InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} /></Tag>;
 
-    case 'blockquote':
+    case 'blockquote': {
+      // Content may span multiple merged `>` lines. Split on blank-line
+      // paragraph breaks so `> a\n>\n> b` renders as two <p> children.
+      const paragraphs = block.content.split(/\n\n+/);
       return (
         <blockquote
           className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic"
           data-block-id={block.id}
         >
-          <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} />
+          {paragraphs.map((para, i) => (
+            <p key={i} className={i > 0 ? 'mt-2' : ''}>
+              <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={para} onOpenLinkedDoc={onOpenLinkedDoc} />
+            </p>
+          ))}
         </blockquote>
       );
+    }
 
     case 'list-item': {
       const indent = (block.level || 0) * 1.25; // 1.25rem per level
@@ -1011,32 +1065,18 @@ const BlockRenderer: React.FC<{
       const isInteractive = isCheckbox && !!onToggleCheckbox;
       return (
         <div
-          className="flex gap-3 my-1.5"
+          className="flex items-start gap-3 my-1.5"
           data-block-id={block.id}
           style={{ marginLeft: `${indent}rem` }}
         >
-          <span
-            className={`select-none shrink-0 flex items-center${isInteractive ? ' cursor-pointer' : ''}`}
-            onClick={isInteractive ? (e) => { e.stopPropagation(); onToggleCheckbox!(block.id, !isChecked); } : undefined}
-            role={isInteractive ? 'checkbox' : undefined}
-            aria-checked={isInteractive ? isChecked : undefined}
-          >
-            {isCheckbox ? (
-              isChecked ? (
-                <svg className="w-4 h-4 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className={`w-4 h-4 text-muted-foreground/50${isInteractive ? ' hover:text-muted-foreground transition-colors' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-              )
-            ) : (
-              <span className="text-primary/60">
-                {(block.level || 0) === 0 ? '•' : (block.level || 0) === 1 ? '◦' : '▪'}
-              </span>
-            )}
-          </span>
+          <ListMarker
+            level={block.level || 0}
+            ordered={block.ordered}
+            orderedIndex={orderedIndex}
+            checked={isChecked}
+            interactive={isInteractive}
+            onToggle={isInteractive ? () => onToggleCheckbox!(block.id, !isChecked) : undefined}
+          />
           <span className={`text-sm leading-relaxed ${isCheckbox && isChecked ? 'text-muted-foreground line-through' : 'text-foreground/90'}`}>
             <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} />
           </span>

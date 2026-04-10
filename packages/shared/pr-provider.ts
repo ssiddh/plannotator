@@ -38,6 +38,7 @@ export type Platform = "github" | "gitlab";
 /** GitHub PR reference */
 export interface GithubPRRef {
   platform: "github";
+  host: string;
   owner: string;
   repo: string;
   number: number;
@@ -57,6 +58,7 @@ export type PRRef = GithubPRRef | GitlabMRRef;
 /** GitHub PR metadata */
 export interface GithubPRMetadata {
   platform: "github";
+  host: string;
   owner: string;
   repo: string;
   number: number;
@@ -68,6 +70,8 @@ export interface GithubPRMetadata {
   headBranch: string;
   baseSha: string;
   headSha: string;
+  /** Merge-base SHA — the common ancestor commit used to compute the PR diff. Differs from baseSha when the base branch has moved. */
+  mergeBaseSha?: string;
   url: string;
 }
 
@@ -83,6 +87,8 @@ export interface GitlabMRMetadata {
   headBranch: string;
   baseSha: string;
   headSha: string;
+  /** Merge-base SHA — the common ancestor commit used to compute the MR diff. */
+  mergeBaseSha?: string;
   url: string;
 }
 
@@ -105,6 +111,7 @@ export interface PRReview {
   state: string;
   body: string;
   submittedAt: string;
+  url?: string;
 }
 
 export interface PRCheck {
@@ -121,6 +128,26 @@ export interface PRLinkedIssue {
   repo: string;
 }
 
+export interface PRThreadComment {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+  url: string;
+  diffHunk?: string;
+}
+
+export interface PRReviewThread {
+  id: string;
+  isResolved: boolean;
+  isOutdated: boolean;
+  path: string;
+  line: number | null;
+  startLine: number | null;
+  diffSide: 'LEFT' | 'RIGHT' | null;
+  comments: PRThreadComment[];
+}
+
 export interface PRContext {
   body: string;
   state: string;
@@ -131,6 +158,7 @@ export interface PRContext {
   mergeStateStatus: string;
   comments: PRComment[];
   reviews: PRReview[];
+  reviewThreads: PRReviewThread[];
   checks: PRCheck[];
   linkedIssues: PRLinkedIssue[];
 }
@@ -174,7 +202,7 @@ export function getDisplayRepo(m: HasPlatform): string {
 /** Reconstruct a PRRef from metadata */
 export function prRefFromMetadata(m: PRMetadata): PRRef {
   if (m.platform === "github") {
-    return { platform: "github", owner: m.owner, repo: m.repo, number: m.number };
+    return { platform: "github", host: m.host, owner: m.owner, repo: m.repo, number: m.number };
   }
   return { platform: "gitlab", host: m.host, projectPath: m.projectPath, iid: m.iid };
 }
@@ -203,27 +231,18 @@ export function encodeApiFilePath(filePath: string): string {
  *
  * Handles:
  * - GitHub: https://github.com/owner/repo/pull/123[/files|/commits]
+ * - GitHub Enterprise: https://ghe.company.com/owner/repo/pull/123
  * - GitLab: https://gitlab.com/group/subgroup/project/-/merge_requests/42[/diffs]
  * - Self-hosted GitLab: https://gitlab.mycompany.com/group/project/-/merge_requests/42
+ *
+ * GitLab is checked first because `/-/merge_requests/` is unambiguous,
+ * while `/pull/` could theoretically appear on any host.
  */
 export function parsePRUrl(url: string): PRRef | null {
   if (!url) return null;
 
-  // GitHub: https://github.com/{owner}/{repo}/pull/{number}[/...]
-  const ghMatch = url.match(
-    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/,
-  );
-  if (ghMatch) {
-    return {
-      platform: "github",
-      owner: ghMatch[1],
-      repo: ghMatch[2],
-      number: parseInt(ghMatch[3], 10),
-    };
-  }
-
   // GitLab: https://{host}/{projectPath}/-/merge_requests/{iid}[/...]
-  // Handles any hostname, nested groups, self-hosted instances
+  // Checked first — `/-/merge_requests/` is the most specific pattern.
   const glMatch = url.match(
     /^https?:\/\/([^/]+)\/(.+?)\/-\/merge_requests\/(\d+)/,
   );
@@ -236,18 +255,32 @@ export function parsePRUrl(url: string): PRRef | null {
     };
   }
 
+  // GitHub (including GHE): https://{host}/{owner}/{repo}/pull/{number}[/...]
+  const ghMatch = url.match(
+    /^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/,
+  );
+  if (ghMatch) {
+    return {
+      platform: "github",
+      host: ghMatch[1],
+      owner: ghMatch[2],
+      repo: ghMatch[3],
+      number: parseInt(ghMatch[4], 10),
+    };
+  }
+
   return null;
 }
 
 // --- Dispatch Functions ---
 
 export async function checkAuth(runtime: PRRuntime, ref: PRRef): Promise<void> {
-  if (ref.platform === "github") return checkGhAuth(runtime);
+  if (ref.platform === "github") return checkGhAuth(runtime, ref.host);
   return checkGlAuth(runtime, ref.host);
 }
 
 export async function getUser(runtime: PRRuntime, ref: PRRef): Promise<string | null> {
-  if (ref.platform === "github") return getGhUser(runtime);
+  if (ref.platform === "github") return getGhUser(runtime, ref.host);
   return getGlUser(runtime, ref.host);
 }
 

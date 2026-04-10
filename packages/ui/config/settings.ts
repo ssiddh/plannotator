@@ -35,6 +35,21 @@ export const SETTINGS = {
 
   // --- Diff display options (namespaced under diffOptions in config.json) ---
 
+  defaultDiffType: {
+    defaultValue: 'unstaged' as 'uncommitted' | 'unstaged' | 'staged',
+    fromCookie: () => {
+      const v = storage.getItem('plannotator-default-diff-type');
+      return v === 'uncommitted' || v === 'unstaged' || v === 'staged' ? v : undefined;
+    },
+    toCookie: (v: string) => storage.setItem('plannotator-default-diff-type', v),
+    serverKey: 'diffOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.defaultDiffType;
+      return v === 'uncommitted' || v === 'unstaged' || v === 'staged' ? v : undefined;
+    },
+    toServer: (v: string) => ({ diffOptions: { defaultDiffType: v } }),
+  },
+
   diffStyle: {
     defaultValue: 'split' as 'split' | 'unified',
     fromCookie: () => {
@@ -147,6 +162,45 @@ export const SETTINGS = {
       return typeof v === 'string' ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { fontSize: v } }),
+  },
+  conventionalComments: {
+    defaultValue: false as boolean,
+    fromCookie: () => {
+      const v = storage.getItem('plannotator-conventional-comments');
+      return v === 'true' ? true : v === 'false' ? false : undefined;
+    },
+    toCookie: (v: boolean) => storage.setItem('plannotator-conventional-comments', String(v)),
+    serverKey: 'conventionalComments',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = sc.conventionalComments;
+      return typeof v === 'boolean' ? v : undefined;
+    },
+    toServer: (v: boolean) => ({ conventionalComments: v }),
+  },
+  /** JSON-serialized array of label configs, or null for defaults.
+   *  Synced to ~/.plannotator/config.json as a parsed array (not a string). */
+  conventionalLabels: {
+    defaultValue: null as string | null,
+    fromCookie: () => storage.getItem('plannotator-cc-labels') || undefined,
+    toCookie: (v: string | null) => {
+      if (v) storage.setItem('plannotator-cc-labels', v);
+      else storage.removeItem('plannotator-cc-labels');
+    },
+    serverKey: 'conventionalLabels',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = sc.conventionalLabels;
+      if (v === null) return null;
+      if (Array.isArray(v)) return JSON.stringify(v);
+      return undefined;
+    },
+    toServer: (v: string | null) => {
+      if (v === null) return { conventionalLabels: null };
+      try {
+        return { conventionalLabels: JSON.parse(v) };
+      } catch {
+        return {};
+      }
+    },
   },
 } satisfies Record<string, SettingDef<unknown>>;
 
