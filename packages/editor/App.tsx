@@ -2009,6 +2009,7 @@ const App: React.FC = () => {
           initialTab={initialExportTab}
           githubToken={githubToken}
           pasteApiUrl={pasteApiUrl}
+          shareBaseUrl={shareBaseUrl}
           {...githubPRExport}
         />
 

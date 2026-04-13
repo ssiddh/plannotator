@@ -39,6 +39,8 @@ interface ExportModalProps {
   githubToken?: string | null;
   /** Paste service URL for creating authenticated shares */
   pasteApiUrl?: string;
+  /** Base URL for share links (e.g., https://plannotator-poc.pages.dev) */
+  shareBaseUrl?: string;
   /** PR metadata if PR already exists */
   prMetadata?: { repo: string; pr_number: number; pr_url: string; planHash?: string } | null;
   /** Whether user is authenticated with GitHub */
@@ -88,6 +90,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   initialTab,
   githubToken,
   pasteApiUrl,
+  shareBaseUrl,
   prMetadata: ghPrMetadata,
   isGitHubAuthenticated = false,
   onExportToPR,
@@ -522,13 +525,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                         <div className="flex items-center gap-1">
                           <input
                             readOnly
-                            value={`${window.location.origin}/p/${createdShareId}`}
+                            value={`${shareBaseUrl || 'https://plannotator-poc.pages.dev'}/p/${createdShareId}`}
                             className="flex-1 bg-muted rounded px-2 py-1 text-xs font-mono"
                             onClick={e => (e.target as HTMLInputElement).select()}
                           />
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText(`${window.location.origin}/p/${createdShareId}`);
+                              navigator.clipboard.writeText(`${shareBaseUrl || 'https://plannotator-poc.pages.dev'}/p/${createdShareId}`);
                               setCopied('short');
                               setTimeout(() => setCopied(false), 2000);
                             }}
