@@ -565,8 +565,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   </p>
                   <button
                     onClick={() => {
-                      // Open OAuth in same window to avoid cross-origin issues
-                      window.location.href = `${pasteApiUrl}/api/auth/github/login`;
+                      // Detect if we're in local mode (localhost) or portal mode (hosted)
+                      const h = window.location.hostname;
+                      const isLocalMode = h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+                      const authUrl = isLocalMode
+                        ? `${window.location.origin}/api/auth/github/login`  // Local plan server
+                        : `${pasteApiUrl}/api/auth/github/login`;  // Paste service
+                      window.location.href = authUrl;
                     }}
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
                   >
@@ -844,7 +849,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     Sign in with GitHub to create pull requests.
                   </p>
                   <button
-                    onClick={() => { if (githubLoginUrl) window.location.href = githubLoginUrl; }}
+                    onClick={() => {
+                      // Detect if we're in local mode (localhost) or portal mode (hosted)
+                      const h = window.location.hostname;
+                      const isLocalMode = h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+                      const authUrl = isLocalMode
+                        ? `${window.location.origin}/api/auth/github/login`  // Local plan server
+                        : (githubLoginUrl || `${pasteApiUrl}/api/auth/github/login`);  // Use prop or fallback to paste service
+                      window.location.href = authUrl;
+                    }}
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
