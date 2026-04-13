@@ -2103,10 +2103,13 @@ const App: React.FC = () => {
               ? () => {
                   clearShareLoadError();
                   // Detect if we're in local mode (localhost) or portal mode (hosted)
-                  const isLocalMode = window.location.hostname === 'localhost';
+                  const isLocalMode = window.location.hostname === 'localhost' ||
+                                      window.location.hostname === '127.0.0.1' ||
+                                      window.location.hostname === '::1' ||
+                                      window.location.hostname === '[::1]';
                   const authUrl = isLocalMode
-                    ? `http://localhost:19432/api/auth/github/login`  // Local plan server
-                    : `${pasteApiUrl || 'https://plannotator-poc.ssiddh.workers.dev'}/api/auth/github/login`;  // Paste service
+                    ? `${window.location.origin}/api/auth/github/login`  // Local plan server
+                    : `${pasteApiUrl || 'https://plannotator-paste.plannotator.workers.dev'}/api/auth/github/login`;  // Paste service
                   window.location.href = authUrl;
                 }
               : undefined
