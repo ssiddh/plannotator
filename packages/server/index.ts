@@ -45,6 +45,7 @@ import { handleDoc, handleObsidianVaults, handleObsidianFiles, handleObsidianDoc
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { createExternalAnnotationHandler } from "./external-annotations";
 import { isWSL } from "./browser";
+import { handleOAuthLogin, handleOAuthCallback } from "@plannotator/github/server/oauth";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
@@ -257,6 +258,39 @@ export async function startPlannotatorServer(
           if (url.pathname === "/api/done" && req.method === "POST") {
             resolveDone?.();
             return Response.json({ ok: true });
+          }
+
+          // API: GitHub OAuth login (local sessions only)
+          if (url.pathname === "/api/auth/github/login" && req.method === "GET") {
+            const clientId = process.env.GITHUB_CLIENT_ID_LOCAL;
+            const clientSecret = process.env.GITHUB_CLIENT_SECRET_LOCAL;
+
+            if (!clientId || !clientSecret) {
+              return Response.json(
+                { error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID_LOCAL and GITHUB_CLIENT_SECRET_LOCAL environment variables." },
+                { status: 500 }
+              );
+            }
+
+            const redirectUri = `http://localhost:${configuredPort}/api/auth/github/callback`;
+            return handleOAuthLogin(req, clientId, redirectUri);
+          }
+
+          // API: GitHub OAuth callback (local sessions only)
+          if (url.pathname === "/api/auth/github/callback" && req.method === "GET") {
+            const clientId = process.env.GITHUB_CLIENT_ID_LOCAL;
+            const clientSecret = process.env.GITHUB_CLIENT_SECRET_LOCAL;
+
+            if (!clientId || !clientSecret) {
+              return Response.json(
+                { error: "GitHub OAuth not configured" },
+                { status: 500 }
+              );
+            }
+
+            const redirectUri = `http://localhost:${configuredPort}/api/auth/github/callback`;
+            const returnUrl = `http://localhost:${configuredPort}`;
+            return await handleOAuthCallback(req, clientId, clientSecret, redirectUri, returnUrl);
           }
 
           // API: Get plan content
