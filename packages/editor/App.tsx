@@ -2102,7 +2102,12 @@ const App: React.FC = () => {
             shareLoadError?.includes('authentication') || shareLoadError?.includes('sign in')
               ? () => {
                   clearShareLoadError();
-                  window.location.href = `${pasteApiUrl || 'http://localhost:19433'}/api/auth/github/login`;
+                  // Detect if we're in local mode (localhost) or portal mode (hosted)
+                  const isLocalMode = window.location.hostname === 'localhost';
+                  const authUrl = isLocalMode
+                    ? `http://localhost:19432/api/auth/github/login`  // Local plan server
+                    : `${pasteApiUrl || 'https://plannotator-poc.ssiddh.workers.dev'}/api/auth/github/login`;  // Paste service
+                  window.location.href = authUrl;
                 }
               : undefined
           }
