@@ -364,3 +364,11 @@ export function parseCookies(cookieHeader: string): Record<string, string> {
   }
   return cookies;
 }
+
+// Export aliases for compatibility with task specification
+export { handleLogin as handleOAuthLogin };
+export { handleCallback as handleOAuthCallback };
+// parseCookies is already exported with the correct name
+
+// Also export generateState for test compatibility
+export { generateState as generateOAuthState };
