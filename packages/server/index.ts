@@ -263,17 +263,16 @@ export async function startPlannotatorServer(
           // API: GitHub OAuth login (local sessions only)
           if (url.pathname === "/api/auth/github/login" && req.method === "GET") {
             const clientId = process.env.GITHUB_CLIENT_ID_LOCAL;
-            const clientSecret = process.env.GITHUB_CLIENT_SECRET_LOCAL;
 
-            if (!clientId || !clientSecret) {
+            if (!clientId) {
               return Response.json(
-                { error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID_LOCAL and GITHUB_CLIENT_SECRET_LOCAL environment variables." },
+                { error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID_LOCAL environment variable." },
                 { status: 500 }
               );
             }
 
-            const redirectUri = `http://localhost:${configuredPort}/api/auth/github/callback`;
-            return handleOAuthLogin(req, clientId, redirectUri);
+            const redirectUri = `http://localhost:${server.port}/api/auth/github/callback`;
+            return await handleOAuthLogin(req, clientId, redirectUri);
           }
 
           // API: GitHub OAuth callback (local sessions only)
@@ -288,8 +287,8 @@ export async function startPlannotatorServer(
               );
             }
 
-            const redirectUri = `http://localhost:${configuredPort}/api/auth/github/callback`;
-            const returnUrl = `http://localhost:${configuredPort}`;
+            const redirectUri = `http://localhost:${server.port}/api/auth/github/callback`;
+            const returnUrl = `http://localhost:${server.port}`;
             return await handleOAuthCallback(req, clientId, clientSecret, redirectUri, returnUrl);
           }
 

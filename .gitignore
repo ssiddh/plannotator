@@ -50,5 +50,8 @@ plannotator-local
 # Paste service local config (contains secrets)
 apps/paste-service/.dev.vars
 
+# Hook server local config (contains OAuth secrets)
+apps/hook/server/.env
+
 # Claude Code session memory
 .remember/
