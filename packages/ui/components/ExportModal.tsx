@@ -87,7 +87,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   isApiMode = false,
   initialTab,
   githubToken,
-  pasteApiUrl = 'http://localhost:19433',
+  pasteApiUrl,
   prMetadata: ghPrMetadata,
   isGitHubAuthenticated = false,
   onExportToPR,
