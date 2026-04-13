@@ -93,8 +93,8 @@ id = "aad4eeb576274fb981d248d19d44e48f"
 preview_id = "6efae5ac33c4443ba8f0a0b83a2eb111"
 
 [vars]
-ALLOWED_ORIGINS = "https://f8b2b297.plannotator-poc.pages.dev,http://localhost:3001"
-PORTAL_URL = "https://f8b2b297.plannotator-poc.pages.dev"
+ALLOWED_ORIGINS = "https://plannotator-poc.pages.dev/,http://localhost:3001"
+PORTAL_URL = "https://plannotator-poc.pages.dev/"
 GITHUB_CLIENT_ID = "Ov23liegyqgZNEU4sfGF"
 OAUTH_REDIRECT_URI = "https://plannotator-poc.ssiddh.workers.dev/api/auth/github/callback"
 GITHUB_DEFAULT_REPO = "ssiddh/fluffy-parakeet"
@@ -111,7 +111,7 @@ GITHUB_PR_BASE_BRANCH = "main"
 
 ```bash
 GITHUB_CLIENT_ID=Ov23liegyqgZNEU4sfGF
-GITHUB_CLIENT_SECRET=2ccabf9bddb112834111af93df12effd700c680f
+GITHUB_CLIENT_SECRET=<your-secret-here>
 OAUTH_REDIRECT_URI=http://localhost:19433/api/auth/github/callback
 PORTAL_URL=http://localhost:3001
 ALLOWED_ORIGINS=http://localhost:3001,http://localhost:5173
@@ -122,6 +122,12 @@ GITHUB_PR_BASE_BRANCH=main
 **Location:** `apps/paste-service/.dev.vars`
 **Used by:** `wrangler dev` (local development)
 **Key variable:** `OAUTH_REDIRECT_URI` uses localhost for local testing
+
+**Note:** `.dev.vars` is gitignored and should never be committed.
+
+**Port clarification:**
+- Port 19432 = Local plan server (handles local Plannotator OAuth)
+- Port 19433 = Local paste service (for testing paste service locally)
 
 ### Portal Build Configuration
 
@@ -284,7 +290,7 @@ pkill -f "wrangler dev"
 **Root Cause:** Missing or incorrect local GitHub OAuth app credentials
 
 **Fix:**
-1. Verify you created the local GitHub OAuth app (see setup instructions)
+1. Verify you created the local GitHub OAuth app (see [dual-oauth-setup.md](docs/dual-oauth-setup.md))
 2. Check environment variables are set:
    ```bash
    echo $GITHUB_CLIENT_ID_LOCAL
@@ -539,7 +545,9 @@ plannotator/
 │   │   ├── wrangler.toml              # Production config
 │   │   ├── .dev.vars                  # Local dev config
 │   │   ├── targets/cloudflare.ts      # Worker entry point
-│   │   ├── auth/github.ts             # OAuth handlers
+│   │   ├── auth/
+│   │   │   ├── middleware.ts          # Auth middleware
+│   │   │   └── types.ts               # Auth types
 │   │   └── core/handler.ts            # Request routing
 │   └── portal/
 │       ├── vite.config.ts             # Build config
@@ -547,7 +555,9 @@ plannotator/
 │       └── pages/Login.tsx            # Login UI
 └── packages/
     └── github/
-        ├── server/handler.ts          # GitHub API integration
+        ├── server/
+        │   ├── oauth.ts               # Shared OAuth utilities
+        │   └── handler.ts             # GitHub API integration
         └── client/useGitHub.ts        # React hooks
 ```
 
