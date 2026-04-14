@@ -139,12 +139,16 @@ export async function authenticatedFetch(
  */
 export function redirectToLogin(): void {
   const pasteServiceUrl = getPasteServiceUrl();
-  const loginUrl = `${pasteServiceUrl}/api/auth/github/login`;
+  const currentUrl = window.location.href;
 
-  // Store current URL to return after login
-  sessionStorage.setItem("plannotator_return_url", window.location.href);
+  // Pass return_to as query parameter so OAuth callback knows where to redirect
+  const loginUrl = new URL(`${pasteServiceUrl}/api/auth/github/login`);
+  loginUrl.searchParams.set("return_to", currentUrl);
 
-  window.location.href = loginUrl;
+  // Also store in sessionStorage as backup
+  sessionStorage.setItem("plannotator_return_url", currentUrl);
+
+  window.location.href = loginUrl.toString();
 }
 
 /**
@@ -165,7 +169,7 @@ function getPasteServiceUrl(): string {
   // In production, this should match PLANNOTATOR_PASTE_URL
   return (
     import.meta.env.VITE_PASTE_SERVICE_URL ||
-    "http://localhost:19433"
+    "https://plannotator-poc.ssiddh.workers.dev"
   );
 }
 
