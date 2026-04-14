@@ -2110,7 +2110,7 @@ const App: React.FC = () => {
                                       window.location.hostname === '[::1]';
                   const authUrl = isLocalMode
                     ? `${window.location.origin}/api/auth/github/login`  // Local plan server
-                    : `${pasteApiUrl || 'https://plannotator-paste.plannotator.workers.dev'}/api/auth/github/login`;  // Paste service
+                    : `${pasteApiUrl || 'https://plannotator-poc.ssiddh.workers.dev'}/api/auth/github/login`;  // Paste service
                   window.location.href = authUrl;
                 }
               : undefined

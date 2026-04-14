@@ -574,7 +574,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       const isLocalMode = h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
                       const authUrl = isLocalMode
                         ? `${window.location.origin}/api/auth/github/login`  // Local plan server
-                        : `${pasteApiUrl || 'https://plannotator-paste.plannotator.workers.dev'}/api/auth/github/login`;  // Paste service
+                        : `${pasteApiUrl || 'https://plannotator-poc.ssiddh.workers.dev'}/api/auth/github/login`;  // Paste service
                       window.location.href = authUrl;
                     }}
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
