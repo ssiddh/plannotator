@@ -143,9 +143,11 @@ export function redirectToLogin(): void {
 
   // Pass return_to as query parameter so OAuth callback knows where to redirect
   const loginUrl = new URL(`${pasteServiceUrl}/api/auth/github/login`);
-  loginUrl.searchParams.set("return_to", currentUrl);
+  // Only send pathname + search (fragments are preserved via sessionStorage)
+  const pathWithQuery = window.location.pathname + window.location.search;
+  loginUrl.searchParams.set("return_to", pathWithQuery);
 
-  // Also store in sessionStorage as backup
+  // Also store in sessionStorage as backup (includes fragment for encryption keys)
   sessionStorage.setItem("plannotator_return_url", currentUrl);
 
   window.location.href = loginUrl.toString();

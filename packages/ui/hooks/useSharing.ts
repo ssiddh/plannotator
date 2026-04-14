@@ -137,10 +137,14 @@ export function useSharing(
             setIsSharedSession(true);
             onSharedLoad?.();
 
-            // Remove the /p/<id> path from browser history so a refresh doesn't
-            // attempt a network fetch. The plan is now held in memory.
-            const basePath = window.location.pathname.replace(/\/p\/[A-Za-z0-9]+$/, '') || '/';
-            window.history.replaceState({}, '', basePath);
+            // Remove the /p/<id> path from browser history ONLY in non-portal contexts
+            // (hook server, review server, etc.) where the plan is now held in memory.
+            // Keep the path on the portal so users can bookmark/reload the shared plan.
+            const isPortalContext = pasteApiUrl && (pasteApiUrl.startsWith('http://') || pasteApiUrl.startsWith('https://'));
+            if (!isPortalContext) {
+              const basePath = window.location.pathname.replace(/\/p\/[A-Za-z0-9]+$/, '') || '/';
+              window.history.replaceState({}, '', basePath);
+            }
 
             return true;
           }

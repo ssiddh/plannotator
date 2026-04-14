@@ -1,7 +1,7 @@
 # Authenticated Share Debugging Session
 
 **Date**: 2026-04-13  
-**Status**: ISSUE IDENTIFIED - Share URL pointing to localhost instead of portal
+**Status**: RESOLVED - Portal redeployed with correct paste service URL
 
 ## Problem Summary
 
@@ -172,3 +172,69 @@ curl https://plannotator-poc.ssiddh.workers.dev/api/paste/NHilNJIF
 # Check what portal returns
 curl https://plannotator-poc.pages.dev/p/NHilNJIF
 ```
+
+## Fix Applied (2026-04-13)
+
+### Issue 1: Share URL Using Localhost Instead of Portal
+**Root Cause:** `ExportModal.tsx` was using `window.location.origin` (local server URL) instead of the `shareBaseUrl` prop (portal URL)  
+**Files Changed:**
+- `packages/ui/components/ExportModal.tsx:525,531` - Changed from `window.location.origin` to `shareBaseUrl`
+
+**Result:** Share URLs now correctly point to `https://plannotator-poc.pages.dev/p/{id}`
+
+### Issue 2: Portal Fetching from Wrong Paste Service URL
+**Root Cause:** Deployed portal at `plannotator-poc.pages.dev` was built with an outdated default paste service URL (`https://plannotator-paste.plannotator.workers.dev`)  
+**Solution:** Rebuilt portal with current code and redeployed to Cloudflare Pages  
+**Deployment:**
+- Rebuilt: `bun run build:portal`
+- Deployed: `npx wrangler pages deploy dist --project-name plannotator-poc`
+- Deployment URL: https://809a35b8.plannotator-poc.pages.dev
+- Production URL: https://plannotator-poc.pages.dev
+
+**Result:** Portal now correctly fetches from `https://plannotator-poc.ssiddh.workers.dev/api/paste/{id}`
+
+### Issue 3: CORS Headers Missing on 401 Response
+**Root Cause:** Paste service CORS configuration had trailing slash in allowed origin (`https://plannotator-poc.pages.dev/`) while browser sends origin without trailing slash (`https://plannotator-poc.pages.dev`)  
+**Files Changed:**
+- `apps/paste-service/wrangler.toml:12-13` - Removed trailing slashes from `ALLOWED_ORIGINS` and `PORTAL_URL`
+
+**Deployment:**
+- Redeployed paste service: `npx wrangler deploy`
+- Version: `f3bf8802-af43-433a-8099-96f3a500afba`
+
+**Result:** 401 responses now include CORS headers, allowing portal to detect authentication requirement and show "Sign in with GitHub" prompt
+
+### Issue 4: OAuth Redirect to Base URL Instead of Plan URL
+**Root Cause:** After OAuth authentication, users were redirected to the portal base URL instead of staying on `/p/{pasteId}`. Two related bugs:
+1. useSharing hook removed `/p/{pasteId}` path after loading the plan (designed for local server context, but was running on portal too)
+2. OAuth callback didn't restore encryption key fragments (`#key=xyz`) that were present in the original URL
+
+**Files Changed:**
+- `packages/ui/hooks/useSharing.ts:142-143` - Only remove `/p/{pasteId}` path in non-portal contexts (detect via external pasteApiUrl)
+- `apps/portal/utils/auth.ts:145-146` - Send pathname + search (not full URL) as `return_to` parameter
+- `packages/editor/App.tsx:189-190` - Restore original URL fragment from sessionStorage after OAuth callback
+- `packages/github/server/oauth.ts:206-209` - Handle relative paths in `return_to` parameter by prepending portalUrl
+
+**Deployment:**
+- Rebuilt portal: `bun run build:portal`
+- Deployed portal: `npx wrangler pages deploy dist --project-name plannotator-poc`
+- Deployment URL: https://6a1c9a9c.plannotator-poc.pages.dev
+- Deployed paste service: `npx wrangler deploy`
+- Version: `1801fded-ddf8-47fc-a284-e80f6fc467e8`
+
+**Result:** After OAuth authentication:
+- Users remain on `/p/{pasteId}` URL (not redirected to base portal)
+- Encryption key fragments (`#key=xyz`) are preserved across OAuth flow
+- Plan URL can be bookmarked and reloaded from paste service
+
+### Testing
+To verify the complete fix:
+1. Create a new authenticated share in the local Plannotator binary
+2. Open the share URL in a browser (incognito/private window to avoid cached auth)
+3. Check network tab - requests should go to `https://plannotator-poc.ssiddh.workers.dev`
+4. **Expected:** Portal shows "Authentication Required" dialog with "Sign in with GitHub" button
+5. After signing in with GitHub:
+   - You should see the plan content
+   - URL bar should still show `/p/{pasteId}` (not base portal URL)
+   - If the share has encryption, the `#key=xyz` fragment should be preserved
+6. Refresh the page - plan should reload from paste service successfully

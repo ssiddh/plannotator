@@ -186,8 +186,29 @@ const App: React.FC = () => {
           setNoteSaveToast({ type: 'success', message: `Signed in as ${data.username}` });
           setTimeout(() => setNoteSaveToast(null), 3000);
 
-          // Clear hash from URL
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          // Restore original URL from sessionStorage (may include encryption key fragment)
+          const savedUrl = sessionStorage.getItem('plannotator_return_url');
+          if (savedUrl) {
+            sessionStorage.removeItem('plannotator_return_url');
+
+            // Extract the fragment from the saved URL (e.g., #key=xyz)
+            try {
+              const url = new URL(savedUrl);
+              const originalFragment = url.hash; // e.g., "#key=xyz"
+
+              // Keep current pathname (should be /p/abc) and restore original fragment
+              window.history.replaceState(null, '',
+                window.location.pathname + window.location.search + originalFragment);
+            } catch {
+              // Fallback if URL parsing fails
+              window.history.replaceState(null, '',
+                window.location.pathname + window.location.search);
+            }
+          } else {
+            // No saved URL, just clear the auth hash
+            window.history.replaceState(null, '',
+              window.location.pathname + window.location.search);
+          }
         }
       } catch (error) {
         console.error('Failed to parse OAuth callback:', error);

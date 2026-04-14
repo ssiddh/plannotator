@@ -203,9 +203,22 @@ export async function handleCallback(
       avatar: user.avatar_url,
     };
     const fragment = btoa(JSON.stringify(fragmentData));
+
     // Use return_to URL if available, otherwise fall back to portalUrl
     const redirectBase = returnTo || portalUrl;
-    const redirectUrl = `${redirectBase}#auth=${fragment}`;
+
+    // If returnTo is a relative path, prepend portalUrl
+    let fullRedirectUrl: string;
+    if (redirectBase.startsWith('http://') || redirectBase.startsWith('https://')) {
+      fullRedirectUrl = redirectBase;
+    } else {
+      // Relative path: combine with portalUrl
+      const baseUrl = portalUrl.endsWith('/') ? portalUrl.slice(0, -1) : portalUrl;
+      const path = redirectBase.startsWith('/') ? redirectBase : '/' + redirectBase;
+      fullRedirectUrl = baseUrl + path;
+    }
+
+    const redirectUrl = `${fullRedirectUrl}#auth=${fragment}`;
     headers.set("Location", redirectUrl);
 
     // Set session-only token cookie (D-04: httpOnly, no Max-Age = session cookie)
